@@ -16,7 +16,7 @@
   const HUMORES = ['fofo', 'feliz', 'triste', 'bravo', 'preguica', 'dormindo'];
 
   const ACESSORIOS = {
-    cabeca: { '': 'Nada', chapeu: 'Chapéu de pescador', bone: 'Boné virado', faixa: 'Faixa ninja', fone: 'Fone de ouvido' },
+    cabeca: { '': 'Nada', chapeu: 'Chapéu de pescador', bone: 'Boné virado', bandana: 'Bandana ninja (placa)', faixa: 'Faixa de luta', fone: 'Fone de ouvido' },
     rosto: { '': 'Nada', oculos: 'Óculos escuros', bambuBoca: 'Bambu na boca' },
     roupa: { '': 'Nada', cachecol: 'Cachecol vermelho', casaco: 'Casaquinho' },
     mao: { '': 'Nada', bambu: 'Segurando bambu' },
@@ -76,6 +76,12 @@
       case 'faixa': return `<path d="M37 70 Q100 44 163 70 L163 83 Q100 57 37 83 Z" fill="${VERMELHO}" stroke="${VERMELHO_E}" stroke-width="2"/>` +
         `<circle cx="100" cy="60" r="6" fill="${B}"/><circle cx="100" cy="60" r="3" fill="${VERMELHO}"/>` +
         `<path d="M163 76 q18 -8 28 2 M163 79 q14 10 20 24" fill="none" stroke="${VERMELHO}" stroke-width="7" stroke-linecap="round"/>`;
+      case 'bandana': return `<path d="M163 73 q18 0 27 13 M162 79 q12 9 14 27" fill="none" stroke="#2c3e7a" stroke-width="7" stroke-linecap="round"/>` +
+        `<path d="M37 68 Q100 40 163 68 L163 82 Q100 54 37 82 Z" fill="#34478c" stroke="#24326a" stroke-width="2"/>` +
+        `<rect x="71" y="45" width="58" height="25" rx="5" fill="#cfd4dc" stroke="#7d8593" stroke-width="2.5"/>` +
+        `<path d="M75 49 h50" stroke="#ffffff" stroke-opacity=".7" stroke-width="2" stroke-linecap="round"/>` +
+        `<circle cx="76" cy="52" r="1.8" fill="#7d8593"/><circle cx="124" cy="52" r="1.8" fill="#7d8593"/><circle cx="76" cy="64" r="1.8" fill="#7d8593"/><circle cx="124" cy="64" r="1.8" fill="#7d8593"/>` +
+        `<ellipse cx="100" cy="62" rx="5.5" ry="4.2" fill="#6b7280"/><circle cx="93.5" cy="55.5" r="2.2" fill="#6b7280"/><circle cx="100" cy="53.5" r="2.2" fill="#6b7280"/><circle cx="106.5" cy="55.5" r="2.2" fill="#6b7280"/>`;
       case 'fone': return `<path d="M38 92 Q38 18 100 18 Q162 18 162 92" fill="none" stroke="#4d6b40" stroke-width="9" stroke-linecap="round"/>` +
         `<rect x="24" y="74" width="24" height="38" rx="11" fill="#6b8f5a" stroke="#4d6b40" stroke-width="2.5"/>` +
         `<rect x="152" y="74" width="24" height="38" rx="11" fill="#6b8f5a" stroke="#4d6b40" stroke-width="2.5"/>`;
