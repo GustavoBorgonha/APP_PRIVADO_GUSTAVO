@@ -50,7 +50,9 @@ const fmtData = d => d ? d.split('-').reverse().join('/') : '';
 const soma = (arr, f) => arr.reduce((t, x) => t + (Number(f(x)) || 0), 0);
 const NOMES_MES = ['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'];
 const nomeMes = m => { const [a, n] = m.split('-'); return `${NOMES_MES[+n - 1]} de ${a}`; };
-const panda = () => '<img src="icons/panda.svg" alt="" class="panda">';
+const Panda = window.Mascote;
+const panda = (humor = 'fofo') => `<span class="panda">${Panda.svg({ humor })}</span>`;
+const reagir = (humor, ...falas) => Panda.reagir(humor, Panda.sorteiaFala(falas));
 const mesDesloc = (m, d) => { const [a, n] = m.split('-').map(Number); const x = new Date(a, n - 1 + d, 1); return `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, '0')}`; };
 
 function parseValor(s) {
@@ -119,17 +121,25 @@ const lancMes = m => db.lancamentos.filter(l => l.data.startsWith(m));
 function render() {
   App.renderPendente = false;
   document.body.classList.toggle('sem-nav', App.modo === 'carregando' || App.modo === 'login');
+  document.body.dataset.aba = ui.aba;
   if (App.modo === 'carregando') { $('#app').innerHTML = `<div class="carregando">${panda()}Carregando seus dados…</div>`; return; }
   if (App.modo === 'login') { $('#app').innerHTML = vLogin(); return; }
   document.querySelectorAll('.nav button').forEach(b => b.classList.toggle('ativo', b.dataset.v === ui.aba));
   const views = { inicio: vInicio, financas: vFinancas, planos: vPlanos, simulador: vSimulador, dados: vDados };
   $('#app').innerHTML = views[ui.aba]();
+  Panda.atualizar();
   if (ui.aba === 'simulador') calcularSimulacao();
 }
 
+/* Humor "de fundo" do panda: fica tristinho com o saldo do mês no vermelho. */
+App.humorBase = () => {
+  const l = lancMes(mesAtual());
+  return soma(l, x => x.tipo === 'receita' ? x.valor : -x.valor) < 0 ? 'triste' : 'fofo';
+};
+
 function vLogin() {
   return `<div class="card login">
-    ${panda()}
+    ${panda(App.msgLogin ? 'triste' : 'fofo')}
     <h1>Meu Controle</h1>
     <p class="muted">Acesso restrito. Entre com uma conta Google autorizada.</p>
     ${App.msgLogin ? `<p class="aviso">${esc(App.msgLogin)}</p>` : ''}
@@ -162,7 +172,7 @@ function vInicio() {
     <div class="hero">
       <div><h1>Olá, ${esc(App.usuario?.nome?.split(' ')[0] || 'Gustavo')}!</h1>
         <p class="sub">Aqui está o resumo de ${nomeMes(mesAtual())}.</p></div>
-      ${panda()}
+      ${Panda.html('no-hero')}
     </div>
     <div class="grid">
       <div class="card stat"><div class="rot">Receitas do mês</div><div class="val pos">${brl(rec)}</div></div>
@@ -173,7 +183,7 @@ function vInicio() {
     <div class="topo"><h2 style="margin:0">Meus planos</h2>
       <div class="acoes"><button class="btn" data-a="novoLanc">+ Lançamento</button><button class="btn pri" data-a="novoPlano">+ Novo plano</button></div></div>
     ${db.planos.length ? `<div class="planos">${db.planos.map(cardPlano).join('')}</div>`
-      : `<div class="card vazio">${panda()}Nenhum plano ainda. Crie um para sua viagem, casamento, casa ou carro.</div>`}
+      : `<div class="card vazio">${panda('preguica')}Nenhum plano ainda. Crie um para sua viagem, casamento, casa ou carro.</div>`}
     ${pendentes.length ? `<div class="card" style="margin-top:16px"><h2>Próximas tarefas</h2>
       ${pendentes.map(t => `<div class="tarefa"><input type="checkbox" data-c="tarefaFeita" data-p="${t.plano.id}" data-i="${t.id}">
         <span>${esc(t.texto)}</span><span class="muted small" style="flex:0">${TIPOS[t.plano.tipo]?.emoji || ''} ${esc(t.plano.nome)}</span></div>`).join('')}
@@ -225,7 +235,7 @@ function vFinancas() {
             <td class="num ${x.tipo === 'receita' ? 'pos' : 'neg'}">${x.tipo === 'receita' ? '+' : '−'} ${brl(x.valor)}</td>
             <td class="num" style="white-space:nowrap"><button class="x" data-a="editarLanc" data-v="${x.id}" title="Editar">✏️</button><button class="x" data-a="apagarLanc" data-v="${x.id}" title="Apagar">✕</button></td>
           </tr>`).join('')}</tbody></table></div>`
-      : `<div class="vazio">${panda()}Nenhum lançamento em ${nomeMes(ui.mes)}.</div>`}
+      : `<div class="vazio">${panda('preguica')}Nenhum lançamento em ${nomeMes(ui.mes)}.</div>`}
       </div>
       <div class="card"><h2>Despesas por categoria</h2>
         ${cats.length ? cats.map(([c, v]) => `<div class="cat"><span>${esc(c)}</span><div class="barra"><i style="width:${v / max * 100}%"></i></div><span class="small">${brl(v)}</span></div>`).join('')
@@ -359,6 +369,7 @@ function vDados() {
         <div class="card"><h2>Conta</h2><p style="margin-top:0">Conectado como <strong>${esc(App.usuario?.email)}</strong></p>
         <button class="btn" data-a="sair">Sair</button></div>`
       : `<p class="sub">Modo local: tudo fica salvo neste aparelho/navegador. Faça backups com frequência.</p>`}
+    ${vSeuPanda()}
     <div class="card"><h2>Backup</h2>
       <p class="muted">Use o backup para guardar uma cópia ou passar seus dados do computador para o celular (e vice-versa).</p>
       <div class="acoes"><button class="btn pri" data-a="exportarJSON">Baixar backup</button><button class="btn" data-a="importarJSON">Restaurar backup</button></div>
@@ -370,6 +381,25 @@ function vDados() {
       <p class="muted" style="margin:0">${db.lancamentos.length} lançamentos · ${db.planos.length} planos</p></div>
     <div class="card"><h2>Zona de perigo</h2>
       <button class="btn perigo" data-a="apagarTudo">Apagar todos os dados</button></div>`;
+}
+
+function vSeuPanda() {
+  const NOMES = { cabeca: 'Cabeça', rosto: 'Rosto', roupa: 'Roupa', mao: 'Mão' };
+  const HUMOR = { fofo: 'Fofo', feliz: 'Feliz', triste: 'Triste', bravo: 'Bravinho', preguica: 'Preguiça', dormindo: 'Dormindo' };
+  return `<div class="card seu-panda"><h2>Seu panda 🐼</h2>
+    <div class="seu-panda-grid">
+      ${Panda.html('previa')}
+      <div>
+        <div class="form">${Object.entries(Panda.ACESSORIOS).map(([campo, ops]) => `<label>${NOMES[campo]}
+          <select data-c="panda" data-f="${campo}">${Object.entries(ops).map(([v, n]) =>
+            `<option value="${v}" ${Panda.prefs[campo] === v ? 'selected' : ''}>${n}</option>`).join('')}</select></label>`).join('')}</div>
+        <div class="acoes" style="margin-top:14px"><button class="btn" data-a="sortearPanda">🎲 Sortear visual</button></div>
+        <p class="muted small" style="margin-bottom:0">Ele reage ao que você faz, cochila quando você some e acorda quando você volta.
+          Cutuque para conversar (mas não exagere 😤). Cada aparelho tem o seu panda.</p>
+      </div>
+    </div>
+    <div class="humores">${Panda.HUMORES.map(h => `<figure>${panda(h)}<figcaption>${HUMOR[h]}</figcaption></figure>`).join('')}</div>
+  </div>`;
 }
 
 /* ---------- modais ---------- */
@@ -404,6 +434,9 @@ function modalLanc(l) {
     const dados = { tipo: d.tipo, desc: d.desc.trim(), categoria: d.categoria.trim() || 'Outros', valor: parseValor(d.valor), data: d.data, fixo: !!d.fixo };
     if (novo) db.lancamentos.push({ id: uid(), ...dados }); else Object.assign(l, dados);
     ui.mes = dados.data.slice(0, 7);
+    if (novo && dados.tipo === 'receita') reagir('feliz', 'Oba! Dinheiro entrando! 💰', 'Uhuul, receita nova! 🎉', 'Rico! 🤑🐼');
+    else if (novo && dados.valor >= 1000) reagir('bravo', 'Eita! Que gastão! 😤', 'Mil reais?! Hmpf! 😤');
+    else if (novo) reagir('triste', 'Lá se vai o dinheirinho… 😢', 'Mais uma despesa… 🥲');
   });
   const preencherCats = () => { $('#cats').innerHTML = CATEGORIAS[$('#lanc-tipo').value].map(c => `<option value="${c}">`).join(''); };
   $('#lanc-tipo').onchange = preencherCats; preencherCats();
@@ -430,6 +463,7 @@ function modalPlano(p, tipoInicial) {
         tarefas: t.tarefas.map(texto => ({ id: uid(), texto, feito: false })) };
       db.planos.push(np);
       ui.aba = 'planos'; ui.plano = np.id;
+      reagir('feliz', 'Plano novo! Vamos juntos! 🐼', 'Que sonho lindo! ✨');
     } else Object.assign(p, dados);
   });
 }
@@ -471,6 +505,7 @@ async function importarCSV() {
     db.lancamentos.push({ id: uid(), tipo, valor: Math.abs(valor), data, desc: (r[iDesc] || '').trim() || 'Sem descrição', categoria: (r[iC] || '').trim() || 'Outros', fixo: iF >= 0 && /^s/i.test(r[iF] || '') });
     n++;
   });
+  if (n) reagir('feliz', 'Planilha importada! 📊');
   salvar(); render();
   alert(`${n} lançamento(s) importado(s).`);
 }
@@ -481,7 +516,11 @@ const acoes = {
   mes: v => { ui.mes = mesDesloc(ui.mes, +v); },
   novoLanc: () => modalLanc(),
   editarLanc: v => modalLanc(db.lancamentos.find(l => l.id === v)),
-  apagarLanc: v => { if (confirm('Apagar este lançamento?')) db.lancamentos = db.lancamentos.filter(l => l.id !== v); },
+  apagarLanc: v => {
+    if (!confirm('Apagar este lançamento?')) return;
+    db.lancamentos = db.lancamentos.filter(l => l.id !== v);
+    reagir('triste', 'Sumiu… 🥲', 'Apagadinho. 🫥');
+  },
   copiarMes: () => {
     const ant = mesDesloc(ui.mes, -1);
     const fixos = lancMes(ant).filter(l => l.fixo);
@@ -490,6 +529,7 @@ const acoes = {
     const novos = fixos.filter(l => !jaTem.has(l.desc + '|' + l.tipo));
     const [a, m] = ui.mes.split('-').map(Number), ultimoDia = new Date(a, m, 0).getDate();
     novos.forEach(l => db.lancamentos.push({ ...l, id: uid(), data: `${ui.mes}-${String(Math.min(+l.data.slice(8), ultimoDia)).padStart(2, '0')}` }));
+    if (novos.length) reagir('feliz', 'Fixos copiados! Menos trabalho 😌');
     alert(`${novos.length} lançamento(s) fixo(s) copiado(s).`);
   },
   exportarCSV, importarCSV,
@@ -497,7 +537,11 @@ const acoes = {
   abrirPlano: v => { ui.aba = 'planos'; ui.plano = v; },
   voltar: () => { ui.plano = null; },
   editarPlano: v => modalPlano(plano(v)),
-  apagarPlano: v => { if (confirm('Excluir este plano e tudo dentro dele?')) { db.planos = db.planos.filter(p => p.id !== v); ui.plano = null; } },
+  apagarPlano: v => {
+    if (!confirm('Excluir este plano e tudo dentro dele?')) return;
+    db.planos = db.planos.filter(p => p.id !== v); ui.plano = null;
+    reagir('triste', 'Ah não, o plano… 😢');
+  },
   apagarItem: (v, el) => { const p = plano(el.dataset.p); p.itens = p.itens.filter(i => i.id !== v); },
   apagarAporte: (v, el) => { const p = plano(el.dataset.p); p.aportes = p.aportes.filter(i => i.id !== v); },
   apagarTarefa: (v, el) => { const p = plano(el.dataset.p); p.tarefas = p.tarefas.filter(i => i.id !== v); },
@@ -508,10 +552,15 @@ const acoes = {
       const d = JSON.parse(txt);
       if (!Array.isArray(d.lancamentos) || !Array.isArray(d.planos)) throw 0;
       if (!confirm('Isso vai substituir os dados atuais por este backup. Continuar?')) return;
-      db = d; salvar(); render(); alert('Backup restaurado!');
+      db = d; reagir('feliz', 'Tudo de volta! 🎉'); salvar(); render(); alert('Backup restaurado!');
     } catch (e) { alert('Arquivo de backup inválido.'); }
   },
-  apagarTudo: () => { if (confirm('Apagar TODOS os dados? Faça um backup antes.') && confirm('Tem certeza? Não dá para desfazer.')) db = vazio(); },
+  apagarTudo: () => {
+    if (!(confirm('Apagar TODOS os dados? Faça um backup antes.') && confirm('Tem certeza? Não dá para desfazer.'))) return;
+    db = vazio();
+    reagir('bravo', 'Apagou TUDO?! 😤');
+  },
+  sortearPanda: () => Panda.sortear(),
   fecharModal,
   entrar: () => { App.msgLogin = ''; return Promise.resolve(App.entrar?.()); },
   sair: () => Promise.resolve(App.sair?.()),
@@ -531,7 +580,11 @@ document.addEventListener('change', e => {
   const p = el.dataset.p && plano(el.dataset.p);
   if (c === 'mes' && el.value) ui.mes = el.value;
   else if (c === 'filtro') ui.filtro = el.value;
-  else if (c === 'tarefaFeita') { const t = p.tarefas.find(t => t.id === el.dataset.i); t.feito = el.checked; }
+  else if (c === 'tarefaFeita') {
+    const t = p.tarefas.find(t => t.id === el.dataset.i); t.feito = el.checked;
+    if (t.feito) reagir('feliz', 'Uma a menos! ✅', 'Tarefa feita! Arrasou 💪');
+  }
+  else if (c === 'panda') { Panda.definir(el.dataset.f, el.value); render(); return; }
   else if (c === 'item') { const i = p.itens.find(i => i.id === el.dataset.i); i[el.dataset.f] = el.dataset.f === 'desc' ? el.value : parseValor(el.value); }
   else if (c === 'notas') { p.notas = el.value; salvar(); return; }
   salvar(); render();
@@ -548,7 +601,13 @@ document.addEventListener('submit', e => {
     const p = plano(f.dataset.p);
     if (tipo === 'addItem') p.itens.push({ id: uid(), desc: d.desc.trim(), previsto: parseValor(d.previsto), pago: 0 });
     if (tipo === 'addTarefa') p.tarefas.push({ id: uid(), texto: d.texto.trim(), feito: false });
-    if (tipo === 'addAporte') p.aportes.push({ id: uid(), valor: parseValor(d.valor), data: d.data || hoje(), obs: d.obs.trim() });
+    if (tipo === 'addAporte') {
+      const antes = guardado(p), valor = parseValor(d.valor);
+      p.aportes.push({ id: uid(), valor, data: d.data || hoje(), obs: d.obs.trim() });
+      if (valor < 0) reagir('triste', 'Tirou do cofrinho… 😢');
+      else if (metaDe(p) && antes < metaDe(p) && guardado(p) >= metaDe(p)) reagir('feliz', 'META BATIDA! 🎉🐼🎉');
+      else reagir('feliz', 'Guardou! Rumo à meta! 🎯', 'Cofrinho mais gordo! 🐷✨');
+    }
   }
   salvar(); render();
   if (tipo !== 'modal') $(`form[data-f="${tipo}"] input`)?.focus();

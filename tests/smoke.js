@@ -59,6 +59,7 @@ async function modoLocal(navegador, url, erros) {
   await p.selectOption('#lanc-tipo', 'receita');
   await p.fill('[name=valor]', '8000'); await p.fill('[name=desc]', 'Salário');
   await p.click('dialog >> text=Salvar');
+  confere(await p.isVisible('.hero .balao.on') && await p.isVisible('.hero .panda-svg.h-feliz'), 'panda fica feliz com a receita');
   await p.click('text=+ Lançamento');
   await p.fill('[name=valor]', '2500'); await p.fill('[name=desc]', 'Aluguel'); await p.fill('[name=categoria]', 'Moradia');
   await p.click('dialog >> text=Salvar');
