@@ -261,52 +261,79 @@ label > input, label > select, label > textarea { margin-top: 6px; color: var(--
 .carregando { text-align: center; padding-top: 28vh; color: var(--muted); }
 .carregando .panda { width: 120px; margin: 0 auto 16px; animation: pular 1.1s ease-in-out infinite; }
 
-/* ---------- Panda: animações de cada humor ---------- */
-.panda-svg { transform-origin: 50% 100%; }
-.panda-svg .olhos, .panda-svg .cabeca, .panda-svg .fx, .panda-svg .lagrima { transform-box: fill-box; }
-.panda-svg .olhos { transform-origin: center; animation: piscar 4.6s infinite; }
-.panda-svg .cabeca { transform-origin: 50% 100%; }
+/* ---------- Panda: animações de cada humor (suaves, com corpo e cabeça separados) ---------- */
+.panda-svg { transform-origin: 50% 96%; will-change: transform; }
+.panda-svg .olhos, .panda-svg .cabeca, .panda-svg .fx, .panda-svg .lagrima, .panda-svg .pupila { transform-box: fill-box; }
+.panda-svg .cabeca { transform-origin: 50% 95%; will-change: transform; }
+.panda-svg .olhos { transform-origin: center; animation: piscar 5.2s cubic-bezier(.4, 0, .2, 1) infinite; }
+.panda-svg .pupila { transform: translate(var(--ox, 0px), var(--oy, 0px)); transition: transform .35s cubic-bezier(.25, .8, .25, 1); }
 .panda-svg .zzz { fill: var(--muted); }
 .panda-svg .fx { transform-origin: center; }
-.panda-svg.h-fofo { animation: flutuar 4s ease-in-out infinite; }
-.panda-svg.h-feliz { animation: pulinho .55s ease-in-out 4; }
-.panda-svg.h-triste { animation: murchar 3.2s ease-in-out infinite; }
-.panda-svg.h-triste .olhos, .panda-svg.h-bravo .olhos, .panda-svg.h-feliz .olhos, .panda-svg.h-dormindo .olhos { animation: none; }
-.panda-svg.h-bravo { animation: tremer .12s linear 10; }
-.panda-svg.h-preguica { animation: balancar 5s ease-in-out infinite; }
-.panda-svg.h-preguica .olhos { animation: none; }
-.panda-svg.h-dormindo { animation: respirar 3.6s ease-in-out infinite; }
-.panda-svg.h-dormindo .cabeca { transform: rotate(-7deg); }
-.panda-svg .sobe { animation: subirFx 1.8s ease-out infinite; }
-.panda-svg .sobe.d2 { animation-delay: .6s; }
-.panda-svg .pisca { animation: brilhar 1.6s ease-in-out infinite; }
-.panda-svg .pisca.d2 { animation-delay: .8s; }
-.panda-svg .zzz { animation: zzz 2.7s ease-in-out infinite; opacity: 0; }
-.panda-svg .zzz.d1 { animation-delay: .9s; }
-.panda-svg .zzz.d2 { animation-delay: 1.8s; }
-.panda-svg .lagrima { animation: lagrima 1.8s ease-in infinite; }
+
+/* Fofo: respira e balança a cabeça devagar */
+.panda-svg.h-fofo { animation: respirar 3.4s ease-in-out infinite; }
+.panda-svg.h-fofo .cabeca { animation: cabecear 6s ease-in-out infinite; }
+/* Feliz: pulinhos com "estica e encolhe" enquanto durar a reação */
+.panda-svg.h-feliz { animation: pulinho .9s cubic-bezier(.3, 0, .3, 1) infinite; }
+.panda-svg.h-feliz .cabeca { animation: cabecear 1.8s ease-in-out infinite; }
+/* Triste: murcha devagar, cabeça baixa */
+.panda-svg.h-triste { animation: respirar 4.4s ease-in-out infinite; }
+.panda-svg.h-triste .cabeca { animation: murchar 4.4s ease-in-out infinite; }
+/* Bravo: treme rapidinho e depois "bufa" */
+.panda-svg.h-bravo { animation: tremer .5s ease-in-out 2, bufar 1.2s ease-in-out 1s infinite; }
+/* Preguiça: balança mole */
+.panda-svg.h-preguica { animation: respirar 5s ease-in-out infinite; }
+.panda-svg.h-preguica .cabeca { animation: balancar 6s ease-in-out infinite; }
+/* Dormindo: respiração lenta e cabeça caída que sobe e desce */
+.panda-svg.h-dormindo { animation: respirar 4.2s ease-in-out infinite; }
+.panda-svg.h-dormindo .cabeca { animation: cochilar 4.2s ease-in-out infinite; }
+.panda-svg.h-triste .olhos, .panda-svg.h-bravo .olhos, .panda-svg.h-feliz .olhos,
+.panda-svg.h-dormindo .olhos, .panda-svg.h-preguica .olhos { animation: none; }
+
+.panda-svg .sobe { animation: subirFx 2s cubic-bezier(.2, .7, .3, 1) infinite; }
+.panda-svg .sobe.d2 { animation-delay: .7s; }
+.panda-svg .pisca { animation: brilhar 2.2s ease-in-out infinite; }
+.panda-svg .pisca.d2 { animation-delay: 1.1s; }
+.panda-svg .zzz { animation: zzz 3.2s ease-in-out infinite; opacity: 0; }
+.panda-svg .zzz.d1 { animation-delay: 1.05s; }
+.panda-svg .zzz.d2 { animation-delay: 2.1s; }
+.panda-svg .lagrima { animation: lagrima 2.2s cubic-bezier(.5, 0, .8, .6) infinite; }
 @media (prefers-color-scheme: dark) {
-  .panda-svg .pelo { stroke: rgba(255, 255, 255, .18); stroke-width: 1.5; }
+  .panda-svg [fill="#2b2321"] { stroke: rgba(255, 255, 255, .16); stroke-width: 1.5; }
 }
 
-@keyframes flutuar { 0%, 100% { transform: translateY(0) rotate(-2deg); } 50% { transform: translateY(-6px) rotate(2deg); } }
+/* Troca de humor/visual: entra com efeito de mola */
+.mascote-corpo.trocou svg { animation-name: mola !important; animation-duration: .6s !important; animation-timing-function: cubic-bezier(.34, 1.56, .64, 1) !important; animation-iteration-count: 1 !important; }
+
+@keyframes flutuar { 0%, 100% { transform: translateY(0) rotate(-1.5deg); } 50% { transform: translateY(-5px) rotate(1.5deg); } }
 @keyframes pular { 0%, 100% { transform: translateY(0) scale(1, 1); } 40% { transform: translateY(-14px) scale(.97, 1.03); } 80% { transform: translateY(0) scale(1.04, .96); } }
-@keyframes pulinho { 0%, 100% { transform: translateY(0) scale(1); } 45% { transform: translateY(-12px) scale(.98, 1.03); } 75% { transform: translateY(0) scale(1.04, .96); } }
-@keyframes murchar { 0%, 100% { transform: translateY(2px) rotate(-1deg); } 50% { transform: translateY(4px) rotate(1deg); } }
-@keyframes tremer { 0%, 100% { transform: translateX(0); } 25% { transform: translateX(-3px) rotate(-1.5deg); } 75% { transform: translateX(3px) rotate(1.5deg); } }
-@keyframes balancar { 0%, 100% { transform: rotate(-4deg); } 50% { transform: rotate(4deg) translateY(2px); } }
-@keyframes respirar { 0%, 100% { transform: scale(1, 1); } 50% { transform: scale(1.025, .975); } }
-@keyframes piscar { 0%, 92%, 100% { transform: scaleY(1); } 95% { transform: scaleY(.1); } }
-@keyframes subirFx { 0% { opacity: 0; transform: translateY(8px) scale(.6); } 25% { opacity: 1; } 100% { opacity: 0; transform: translateY(-22px) scale(1.1); } }
-@keyframes brilhar { 0%, 100% { opacity: .2; transform: scale(.6); } 50% { opacity: 1; transform: scale(1.15) rotate(20deg); } }
-@keyframes zzz { 0% { opacity: 0; transform: translate(0, 6px); } 30% { opacity: 1; } 100% { opacity: 0; transform: translate(8px, -14px); } }
-@keyframes lagrima { 0% { opacity: 0; transform: translateY(-4px); } 30% { opacity: 1; } 100% { opacity: 0; transform: translateY(14px); } }
-@keyframes aparecer { from { opacity: 0; transform: translateY(6px) scale(.9); } to { opacity: 1; transform: none; } }
+@keyframes respirar { 0%, 100% { transform: scale(1, 1); } 50% { transform: scale(1.015, .985); } }
+@keyframes cabecear { 0%, 100% { transform: rotate(0deg) translateY(0); } 25% { transform: rotate(-2.5deg) translateY(-1px); } 75% { transform: rotate(2.5deg) translateY(-1px); } }
+@keyframes pulinho {
+  0%, 100% { transform: translateY(0) scale(1.03, .97); }
+  15% { transform: translateY(0) scale(1.06, .94); }
+  45% { transform: translateY(-14px) scale(.97, 1.04); }
+  70% { transform: translateY(0) scale(1.05, .95); }
+  85% { transform: translateY(-2px) scale(.99, 1.01); }
+}
+@keyframes murchar { 0%, 100% { transform: rotate(-3deg) translateY(3px); } 50% { transform: rotate(2deg) translateY(5px); } }
+@keyframes tremer { 0%, 100% { transform: translateX(0) rotate(0); } 20% { transform: translateX(-3px) rotate(-2deg); } 40% { transform: translateX(3px) rotate(2deg); } 60% { transform: translateX(-2px) rotate(-1deg); } 80% { transform: translateX(2px) rotate(1deg); } }
+@keyframes bufar { 0%, 100% { transform: scale(1); } 40% { transform: scale(1.04, .97); } 55% { transform: scale(.99, 1.02); } }
+@keyframes balancar { 0%, 100% { transform: rotate(-5deg) translateY(2px); } 50% { transform: rotate(4deg) translateY(3px); } }
+@keyframes cochilar { 0%, 100% { transform: rotate(-9deg) translateY(4px); } 50% { transform: rotate(-6deg) translateY(2px); } }
+@keyframes piscar { 0%, 90%, 94%, 100% { transform: scaleY(1); } 92% { transform: scaleY(.08); } }
+@keyframes mola { 0% { transform: scale(.88, 1.08) translateY(4px); } 60% { transform: scale(1.04, .97); } 100% { transform: scale(1); } }
+@keyframes subirFx { 0% { opacity: 0; transform: translateY(8px) scale(.6); } 25% { opacity: 1; } 100% { opacity: 0; transform: translateY(-24px) scale(1.1); } }
+@keyframes brilhar { 0%, 100% { opacity: .15; transform: scale(.6) rotate(0); } 50% { opacity: 1; transform: scale(1.15) rotate(25deg); } }
+@keyframes zzz { 0% { opacity: 0; transform: translate(0, 6px); } 30% { opacity: 1; } 100% { opacity: 0; transform: translate(9px, -16px); } }
+@keyframes lagrima { 0% { opacity: 0; transform: translateY(-4px); } 25% { opacity: 1; } 100% { opacity: 0; transform: translateY(16px); } }
+@keyframes aparecer { 0% { opacity: 0; transform: translateY(8px) scale(.85); } 70% { opacity: 1; transform: translateY(-2px) scale(1.03); } 100% { opacity: 1; transform: none; } }
 
 /* ---------- Mascote "vivo" com balão de fala ---------- */
 .mascote { position: relative; flex-shrink: 0; }
 .mascote-corpo { cursor: pointer; -webkit-tap-highlight-color: transparent; }
-.mascote-corpo:active svg { transform: scale(.94); }
+.mascote-corpo { transition: transform .2s cubic-bezier(.34, 1.56, .64, 1); }
+.mascote-corpo:active { transform: scale(.93); }
 .balao {
   position: absolute; bottom: 92%; right: 55%; z-index: 2;
   width: max-content; max-width: 210px;
