@@ -2,15 +2,12 @@
 // Esses valores NÃO são segredo: quem protege os dados são as regras do Firestore
 // (firestore.rules) e a lista de e-mails autorizados. Veja CONFIGURAR.md.
 //
-// Enquanto estiver "null", o app funciona em modo local (dados só neste aparelho).
-window.FIREBASE_CONFIG = null;
-
-// Exemplo de como fica depois de preenchido:
-// window.FIREBASE_CONFIG = {
-//   apiKey: "AIza...",
-//   authDomain: "meu-projeto.firebaseapp.com",
-//   projectId: "meu-projeto",
-//   storageBucket: "meu-projeto.appspot.com",
-//   messagingSenderId: "123456789",
-//   appId: "1:123456789:web:abc123",
-// };
+// Se trocar para "null", o app volta ao modo local (dados só no aparelho).
+window.FIREBASE_CONFIG = {
+  apiKey: "AIzaSyCxPbRVCEDeH0dod1imsw5QLFJfKVw7Nis",
+  authDomain: "projetogustavoapp-88b20.firebaseapp.com",
+  projectId: "projetogustavoapp-88b20",
+  storageBucket: "projetogustavoapp-88b20.firebasestorage.app",
+  messagingSenderId: "684421552589",
+  appId: "1:684421552589:web:d8a1d4d8f1aa7d06a2cc84",
+};
