@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Meu Controle</title>
+  <meta name="description" content="Controle pessoal de finanças e planejamento de viagens, casamento, casa e carro.">
+  <meta name="theme-color" content="#0f766e">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="icons/icon-192.png">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="layout">
+    <nav class="nav" aria-label="Navegação principal">
+      <div class="brand">💼 <span>Meu Controle</span></div>
+      <button data-a="aba" data-v="inicio"><span class="ic">🏠</span><span>Início</span></button>
+      <button data-a="aba" data-v="financas"><span class="ic">💰</span><span>Finanças</span></button>
+      <button data-a="aba" data-v="planos"><span class="ic">🎯</span><span>Planos</span></button>
+      <button data-a="aba" data-v="simulador"><span class="ic">🧮</span><span>Simulador</span></button>
+      <button data-a="aba" data-v="dados"><span class="ic">⚙️</span><span>Dados</span></button>
+    </nav>
+    <main id="app" tabindex="-1"></main>
+  </div>
+
+  <dialog id="modal">
+    <div id="modal-body"></div>
+  </dialog>
+
+  <script src="app.js"></script>
+</body>
+</html>
