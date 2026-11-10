@@ -1,0 +1,35 @@
+name: Verificar app
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  verificar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Conferir sintaxe do JavaScript
+        run: |
+          node --check app.js
+          node --check sw.js
+          node --check firebase-config.js
+          node --input-type=module --check < nuvem.js
+
+      - name: Instalar navegador de teste
+        run: |
+          npm install --no-save playwright@1.63.0
+          npx playwright install --with-deps chromium
+
+      - name: Testar o app no navegador
+        run: node tests/smoke.js
