@@ -16,6 +16,8 @@ PWA em JavaScript puro (sem framework, sem build) para finanças pessoais e plan
 ## Arquivos
 
 - `index.html`, `styles.css` — estrutura e visual (tema claro/escuro, celular/computador).
+  Visual inspirado no app Toki: base preto/branco, degradê pastel, cards arredondados, botões em pílula.
+  Mascote: panda (`icons/panda.svg`, usado via `panda()` em `app.js`). Fonte Outfit em `fonts/`.
 - `app.js` — toda a lógica e as telas (Início, Finanças, Planos, Simulador, Dados).
   O estado fica em `db = { lancamentos, planos }`; toda mudança chama `salvar()` e `render()`.
 - `nuvem.js` — login e sincronização. `App.sincronizar(db)` envia só o que mudou; os

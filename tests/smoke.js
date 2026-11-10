@@ -6,7 +6,7 @@ const path = require('path');
 const { chromium } = require('playwright');
 
 const RAIZ = path.join(__dirname, '..');
-const TIPOS = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml', '.png': 'image/png', '.webmanifest': 'application/manifest+json' };
+const TIPOS = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml', '.png': 'image/png', '.woff2': 'font/woff2','.webmanifest': 'application/manifest+json' };
 
 const servidor = http.createServer((req, res) => {
   let arq = path.normalize(decodeURIComponent(req.url.split('?')[0]));

@@ -50,6 +50,7 @@ const fmtData = d => d ? d.split('-').reverse().join('/') : '';
 const soma = (arr, f) => arr.reduce((t, x) => t + (Number(f(x)) || 0), 0);
 const NOMES_MES = ['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'];
 const nomeMes = m => { const [a, n] = m.split('-'); return `${NOMES_MES[+n - 1]} de ${a}`; };
+const panda = () => '<img src="icons/panda.svg" alt="" class="panda">';
 const mesDesloc = (m, d) => { const [a, n] = m.split('-').map(Number); const x = new Date(a, n - 1 + d, 1); return `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, '0')}`; };
 
 function parseValor(s) {
@@ -118,7 +119,7 @@ const lancMes = m => db.lancamentos.filter(l => l.data.startsWith(m));
 function render() {
   App.renderPendente = false;
   document.body.classList.toggle('sem-nav', App.modo === 'carregando' || App.modo === 'login');
-  if (App.modo === 'carregando') { $('#app').innerHTML = '<div class="vazio" style="padding-top:30vh">Carregando seus dados…</div>'; return; }
+  if (App.modo === 'carregando') { $('#app').innerHTML = `<div class="carregando">${panda()}Carregando seus dados…</div>`; return; }
   if (App.modo === 'login') { $('#app').innerHTML = vLogin(); return; }
   document.querySelectorAll('.nav button').forEach(b => b.classList.toggle('ativo', b.dataset.v === ui.aba));
   const views = { inicio: vInicio, financas: vFinancas, planos: vPlanos, simulador: vSimulador, dados: vDados };
@@ -128,11 +129,11 @@ function render() {
 
 function vLogin() {
   return `<div class="card login">
-    <div style="font-size:44px">💼</div>
+    ${panda()}
     <h1>Meu Controle</h1>
     <p class="muted">Acesso restrito. Entre com uma conta Google autorizada.</p>
     ${App.msgLogin ? `<p class="aviso">${esc(App.msgLogin)}</p>` : ''}
-    <button class="btn pri" data-a="entrar" style="width:100%;padding:12px">Entrar com Google</button>
+    <button class="btn pri" data-a="entrar">Entrar com Google</button>
   </div>`;
 }
 
@@ -158,8 +159,11 @@ function vInicio() {
   const totalGuardado = soma(db.planos, guardado);
   const pendentes = db.planos.flatMap(p => p.tarefas.filter(t => !t.feito).map(t => ({ ...t, plano: p }))).slice(0, 8);
   return `
-    <h1>Olá, ${esc(App.usuario?.nome?.split(' ')[0] || 'Gustavo')} 👋</h1>
-    <p class="sub">Resumo de ${nomeMes(mesAtual())}</p>
+    <div class="hero">
+      <div><h1>Olá, ${esc(App.usuario?.nome?.split(' ')[0] || 'Gustavo')}!</h1>
+        <p class="sub">Aqui está o resumo de ${nomeMes(mesAtual())}.</p></div>
+      ${panda()}
+    </div>
     <div class="grid">
       <div class="card stat"><div class="rot">Receitas do mês</div><div class="val pos">${brl(rec)}</div></div>
       <div class="card stat"><div class="rot">Despesas do mês</div><div class="val neg">${brl(des)}</div></div>
@@ -169,7 +173,7 @@ function vInicio() {
     <div class="topo"><h2 style="margin:0">Meus planos</h2>
       <div class="acoes"><button class="btn" data-a="novoLanc">+ Lançamento</button><button class="btn pri" data-a="novoPlano">+ Novo plano</button></div></div>
     ${db.planos.length ? `<div class="planos">${db.planos.map(cardPlano).join('')}</div>`
-      : `<div class="card vazio">Nenhum plano ainda. Crie um para sua viagem, casamento, casa ou carro.</div>`}
+      : `<div class="card vazio">${panda()}Nenhum plano ainda. Crie um para sua viagem, casamento, casa ou carro.</div>`}
     ${pendentes.length ? `<div class="card" style="margin-top:16px"><h2>Próximas tarefas</h2>
       ${pendentes.map(t => `<div class="tarefa"><input type="checkbox" data-c="tarefaFeita" data-p="${t.plano.id}" data-i="${t.id}">
         <span>${esc(t.texto)}</span><span class="muted small" style="flex:0">${TIPOS[t.plano.tipo]?.emoji || ''} ${esc(t.plano.nome)}</span></div>`).join('')}
@@ -221,7 +225,7 @@ function vFinancas() {
             <td class="num ${x.tipo === 'receita' ? 'pos' : 'neg'}">${x.tipo === 'receita' ? '+' : '−'} ${brl(x.valor)}</td>
             <td class="num" style="white-space:nowrap"><button class="x" data-a="editarLanc" data-v="${x.id}" title="Editar">✏️</button><button class="x" data-a="apagarLanc" data-v="${x.id}" title="Apagar">✕</button></td>
           </tr>`).join('')}</tbody></table></div>`
-      : `<div class="vazio">Nenhum lançamento em ${nomeMes(ui.mes)}.</div>`}
+      : `<div class="vazio">${panda()}Nenhum lançamento em ${nomeMes(ui.mes)}.</div>`}
       </div>
       <div class="card"><h2>Despesas por categoria</h2>
         ${cats.length ? cats.map(([c, v]) => `<div class="cat"><span>${esc(c)}</span><div class="barra"><i style="width:${v / max * 100}%"></i></div><span class="small">${brl(v)}</span></div>`).join('')

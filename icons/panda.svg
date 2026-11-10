@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" role="img" aria-label="Panda">
+  <defs>
+    <linearGradient id="pelo" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#53555C"/>
+      <stop offset="1" stop-color="#111112"/>
+    </linearGradient>
+  </defs>
+  <!-- orelhas -->
+  <circle cx="48" cy="50" r="27" fill="url(#pelo)"/>
+  <circle cx="152" cy="50" r="27" fill="url(#pelo)"/>
+  <!-- corpo / cabeça -->
+  <rect x="20" y="36" width="160" height="150" rx="70" fill="url(#pelo)"/>
+  <!-- rosto -->
+  <rect x="36" y="58" width="128" height="108" rx="52" fill="#FFFFFF"/>
+  <!-- manchas dos olhos -->
+  <ellipse cx="74" cy="104" rx="17" ry="23" transform="rotate(28 74 104)" fill="url(#pelo)"/>
+  <ellipse cx="126" cy="104" rx="17" ry="23" transform="rotate(-28 126 104)" fill="url(#pelo)"/>
+  <!-- olhos -->
+  <rect x="71" y="92" width="9" height="18" rx="4.5" fill="#FFFFFF"/>
+  <rect x="120" y="92" width="9" height="18" rx="4.5" fill="#FFFFFF"/>
+  <!-- bochechas -->
+  <ellipse cx="58" cy="134" rx="10" ry="6" fill="#F95B6D" opacity=".22"/>
+  <ellipse cx="142" cy="134" rx="10" ry="6" fill="#F95B6D" opacity=".22"/>
+  <!-- focinho -->
+  <ellipse cx="100" cy="128" rx="10" ry="7" fill="url(#pelo)"/>
+  <path d="M92 141q8 7 16 0" fill="none" stroke="#2F3333" stroke-width="4" stroke-linecap="round"/>
+</svg>

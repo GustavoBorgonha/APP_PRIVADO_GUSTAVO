@@ -1,5 +1,28 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
-  <rect width="512" height="512" rx="0" fill="#0f766e"/>
-  <circle cx="256" cy="256" r="150" fill="none" stroke="#fff" stroke-width="28"/>
-  <path d="M256 160v192M300 196c-10-14-26-22-44-22-26 0-46 14-46 34 0 46 92 28 92 76 0 20-20 36-46 36-20 0-38-9-48-24" fill="none" stroke="#fff" stroke-width="26" stroke-linecap="round"/>
+  <defs>
+    <linearGradient id="fundo" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#E6F4FF"/>
+      <stop offset=".45" stop-color="#FFF1E9"/>
+      <stop offset="1" stop-color="#F5EAFF"/>
+    </linearGradient>
+    <linearGradient id="pelo" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#53555C"/>
+      <stop offset="1" stop-color="#111112"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" fill="url(#fundo)"/>
+  <g transform="translate(96 88) scale(1.6)">
+    <circle cx="48" cy="50" r="27" fill="url(#pelo)"/>
+    <circle cx="152" cy="50" r="27" fill="url(#pelo)"/>
+    <rect x="20" y="36" width="160" height="150" rx="70" fill="url(#pelo)"/>
+    <rect x="36" y="58" width="128" height="108" rx="52" fill="#FFFFFF"/>
+    <ellipse cx="74" cy="104" rx="17" ry="23" transform="rotate(28 74 104)" fill="url(#pelo)"/>
+    <ellipse cx="126" cy="104" rx="17" ry="23" transform="rotate(-28 126 104)" fill="url(#pelo)"/>
+    <rect x="71" y="92" width="9" height="18" rx="4.5" fill="#FFFFFF"/>
+    <rect x="120" y="92" width="9" height="18" rx="4.5" fill="#FFFFFF"/>
+    <ellipse cx="58" cy="134" rx="10" ry="6" fill="#F95B6D" opacity=".22"/>
+    <ellipse cx="142" cy="134" rx="10" ry="6" fill="#F95B6D" opacity=".22"/>
+    <ellipse cx="100" cy="128" rx="10" ry="7" fill="url(#pelo)"/>
+    <path d="M92 141q8 7 16 0" fill="none" stroke="#2F3333" stroke-width="4" stroke-linecap="round"/>
+  </g>
 </svg>
