@@ -1,6 +1,6 @@
 // Service worker: guarda os arquivos do app para funcionar offline.
-const CACHE = 'meu-controle-v1';
-const ARQUIVOS = ['./', 'index.html', 'styles.css', 'app.js', 'manifest.webmanifest', 'icons/icon.svg', 'icons/icon-192.png', 'icons/icon-512.png'];
+const CACHE = 'meu-controle-v2';
+const ARQUIVOS = ['./', 'index.html', 'styles.css', 'app.js', 'nuvem.js', 'firebase-config.js', 'manifest.webmanifest', 'icons/icon.svg', 'icons/icon-192.png', 'icons/icon-512.png'];
 
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(CACHE).then(c => c.addAll(ARQUIVOS)).then(() => self.skipWaiting()));
@@ -8,14 +8,22 @@ self.addEventListener('install', e => {
 self.addEventListener('activate', e => {
   e.waitUntil(caches.keys().then(ks => Promise.all(ks.filter(k => k !== CACHE).map(k => caches.delete(k)))).then(() => self.clients.claim()));
 });
-// Rede primeiro (para pegar atualizações), cache quando estiver offline.
+
+const guardar = (req, resp) => { const copia = resp.clone(); caches.open(CACHE).then(c => c.put(req, copia)); return resp; };
+
 self.addEventListener('fetch', e => {
   if (e.request.method !== 'GET') return;
+  const url = new URL(e.request.url);
+  // Bibliotecas do Firebase (versão fixa): cache primeiro.
+  if (url.hostname === 'www.gstatic.com' && url.pathname.startsWith('/firebasejs/')) {
+    e.respondWith(caches.match(e.request).then(r => r || fetch(e.request).then(resp => guardar(e.request, resp))));
+    return;
+  }
+  // Login e banco de dados (outros domínios) passam direto, sem cache.
+  if (url.origin !== location.origin) return;
+  // Arquivos do app: rede primeiro (para pegar atualizações), cache quando offline.
   e.respondWith(
-    fetch(e.request).then(r => {
-      const copia = r.clone();
-      caches.open(CACHE).then(c => c.put(e.request, copia));
-      return r;
-    }).catch(() => caches.match(e.request).then(r => r || caches.match('index.html')))
+    fetch(e.request).then(resp => guardar(e.request, resp))
+      .catch(() => caches.match(e.request).then(r => r || caches.match('index.html')))
   );
 });

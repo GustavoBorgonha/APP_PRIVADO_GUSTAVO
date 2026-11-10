@@ -96,10 +96,14 @@ function carregar() {
   return vazio();
 }
 function salvar() {
+  if (App.modo === 'nuvem') { App.sincronizar?.(db); return; }
+  if (App.modo !== 'local') return;
   try { localStorage.setItem(CHAVE, JSON.stringify(db)); }
   catch (e) { alert('Não foi possível salvar os dados neste navegador. Faça um backup em "Dados".'); }
 }
 
+/* App: estado da conexão. modo = 'local' | 'carregando' | 'login' | 'nuvem' */
+const App = window.App = { modo: 'local', usuario: null, msgLogin: '' };
 let db = carregar();
 const ui = { aba: 'inicio', mes: mesAtual(), plano: null, filtro: 'todos' };
 
@@ -112,10 +116,24 @@ const lancMes = m => db.lancamentos.filter(l => l.data.startsWith(m));
 
 /* ---------- renderização ---------- */
 function render() {
+  App.renderPendente = false;
+  document.body.classList.toggle('sem-nav', App.modo === 'carregando' || App.modo === 'login');
+  if (App.modo === 'carregando') { $('#app').innerHTML = '<div class="vazio" style="padding-top:30vh">Carregando seus dados…</div>'; return; }
+  if (App.modo === 'login') { $('#app').innerHTML = vLogin(); return; }
   document.querySelectorAll('.nav button').forEach(b => b.classList.toggle('ativo', b.dataset.v === ui.aba));
   const views = { inicio: vInicio, financas: vFinancas, planos: vPlanos, simulador: vSimulador, dados: vDados };
   $('#app').innerHTML = views[ui.aba]();
   if (ui.aba === 'simulador') calcularSimulacao();
+}
+
+function vLogin() {
+  return `<div class="card login">
+    <div style="font-size:44px">💼</div>
+    <h1>Meu Controle</h1>
+    <p class="muted">Acesso restrito. Entre com uma conta Google autorizada.</p>
+    ${App.msgLogin ? `<p class="aviso">${esc(App.msgLogin)}</p>` : ''}
+    <button class="btn pri" data-a="entrar" style="width:100%;padding:12px">Entrar com Google</button>
+  </div>`;
 }
 
 function cardPlano(p) {
@@ -140,7 +158,7 @@ function vInicio() {
   const totalGuardado = soma(db.planos, guardado);
   const pendentes = db.planos.flatMap(p => p.tarefas.filter(t => !t.feito).map(t => ({ ...t, plano: p }))).slice(0, 8);
   return `
-    <h1>Olá, Gustavo 👋</h1>
+    <h1>Olá, ${esc(App.usuario?.nome?.split(' ')[0] || 'Gustavo')} 👋</h1>
     <p class="sub">Resumo de ${nomeMes(mesAtual())}</p>
     <div class="grid">
       <div class="card stat"><div class="rot">Receitas do mês</div><div class="val pos">${brl(rec)}</div></div>
@@ -332,7 +350,11 @@ function calcularSimulacao() {
 function vDados() {
   return `
     <h1>Seus dados</h1>
-    <p class="sub">Tudo fica salvo neste aparelho/navegador. Faça backups com frequência.</p>
+    ${App.modo === 'nuvem'
+      ? `<p class="sub">Dados sincronizados na nuvem e compartilhados entre os usuários autorizados.</p>
+        <div class="card"><h2>Conta</h2><p style="margin-top:0">Conectado como <strong>${esc(App.usuario?.email)}</strong></p>
+        <button class="btn" data-a="sair">Sair</button></div>`
+      : `<p class="sub">Modo local: tudo fica salvo neste aparelho/navegador. Faça backups com frequência.</p>`}
     <div class="card"><h2>Backup</h2>
       <p class="muted">Use o backup para guardar uma cópia ou passar seus dados do computador para o celular (e vice-versa).</p>
       <div class="acoes"><button class="btn pri" data-a="exportarJSON">Baixar backup</button><button class="btn" data-a="importarJSON">Restaurar backup</button></div>
@@ -487,6 +509,8 @@ const acoes = {
   },
   apagarTudo: () => { if (confirm('Apagar TODOS os dados? Faça um backup antes.') && confirm('Tem certeza? Não dá para desfazer.')) db = vazio(); },
   fecharModal,
+  entrar: () => { App.msgLogin = ''; return Promise.resolve(App.entrar?.()); },
+  sair: () => Promise.resolve(App.sair?.()),
 };
 
 document.addEventListener('click', e => {
@@ -526,7 +550,36 @@ document.addEventListener('submit', e => {
   if (tipo !== 'modal') $(`form[data-f="${tipo}"] input`)?.focus();
 });
 
-render();
+/* ---------- integração com a nuvem (nuvem.js) ---------- */
+App.render = render;
+App.mostrarLogin = msg => { App.modo = 'login'; if (msg) App.msgLogin = msg; fecharModalSeAberto(); render(); };
+App.carregando = () => { App.modo = 'carregando'; db = vazio(); render(); };
+App.receber = (colecao, docs, pronto) => {
+  db[colecao] = docs;
+  if (!pronto) return;
+  if (App.modo === 'carregando') {
+    App.modo = 'nuvem';
+    // Primeira vez na nuvem: oferece enviar os dados que estavam só neste aparelho.
+    const local = carregar();
+    if (!db.lancamentos.length && !db.planos.length && (local.lancamentos.length || local.planos.length) &&
+        confirm('Encontramos dados salvos neste aparelho. Enviar para a nuvem?')) {
+      db.lancamentos = local.lancamentos; db.planos = local.planos; salvar();
+    }
+  }
+  // Não atrapalha quem está digitando: atualiza a tela quando sair do campo.
+  const ativo = document.activeElement;
+  if (modal.open || (ativo && ativo.closest('main') && /INPUT|TEXTAREA|SELECT/.test(ativo.tagName))) App.renderPendente = true;
+  else render();
+};
+function fecharModalSeAberto() { if (modal.open) fecharModal(); }
+document.addEventListener('focusout', () => setTimeout(() => {
+  const a = document.activeElement;
+  if (App.renderPendente && !modal.open && !(a && a.closest('main') && /INPUT|TEXTAREA|SELECT/.test(a.tagName))) render();
+}, 0));
+modal.addEventListener('close', () => { if (App.renderPendente) render(); });
+
+if (window.FIREBASE_CONFIG && window.FIREBASE_CONFIG.apiKey) App.carregando();
+else render();
 
 if ('serviceWorker' in navigator && location.protocol !== 'file:') {
   navigator.serviceWorker.register('sw.js').catch(() => {});

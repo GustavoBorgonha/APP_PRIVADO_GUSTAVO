@@ -15,15 +15,14 @@ instalado no celular como aplicativo, inclusive offline.
 - **🧮 Simulador** de financiamento (Price e SAC) para casa e carro.
 - **⚙️ Dados** — backup e restauração (JSON).
 
-Os dados ficam salvos **no próprio aparelho** (localStorage). Use o backup para passar do computador
-para o celular ou guardar uma cópia.
+## Acesso e dados
 
-## Como publicar (GitHub Pages)
+- **Com Firebase configurado** (veja [CONFIGURAR.md](CONFIGURAR.md)): login com Google, acesso apenas
+  para os e-mails autorizados, e dados **compartilhados e sincronizados em tempo real** entre
+  computador e celulares (funciona offline e sincroniza depois).
+- **Sem configurar**: modo local — os dados ficam só no aparelho (localStorage).
 
-1. No GitHub: **Settings → Pages**.
-2. Em *Source*, escolha **Deploy from a branch**, branch `main`, pasta `/ (root)` e salve.
-3. Em ~1 minuto o site estará em `https://<seu-usuario>.github.io/aplicativo_pessoal_gustavo/`.
-4. No celular, abra esse endereço e use **“Adicionar à tela inicial”**.
+O site é publicado pelo **Netlify** a partir deste repositório privado.
 
 ## Rodar localmente
 
@@ -40,4 +39,7 @@ Depois abra http://localhost:8000.
 | `index.html` | estrutura da página |
 | `styles.css` | visual (tema claro/escuro, layout celular/computador) |
 | `app.js` | toda a lógica do app |
+| `nuvem.js`, `firebase-config.js` | login Google e sincronização (Firebase) |
+| `firestore.rules` | regras de segurança do banco de dados |
+| `netlify.toml` | configuração da publicação |
 | `manifest.webmanifest`, `sw.js`, `icons/` | instalação como app e funcionamento offline |

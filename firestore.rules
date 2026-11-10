@@ -1,0 +1,23 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Só entra quem fez login com Google E está na lista de e-mails autorizados.
+    // A lista fica no documento  acesso/permitidos  (campo "emails", tipo array),
+    // e só pode ser alterada manualmente pelo dono no console do Firebase.
+    function autorizado() {
+      return request.auth != null
+        && request.auth.token.email_verified == true
+        && request.auth.token.email in get(/databases/$(database)/documents/acesso/permitidos).data.emails;
+    }
+
+    match /lancamentos/{id} { allow read, write: if autorizado(); }
+    match /planos/{id}      { allow read, write: if autorizado(); }
+
+    // Ninguém altera a lista de acesso pelo app.
+    match /acesso/{doc} { allow read, write: if false; }
+
+    // Todo o resto é bloqueado.
+    match /{document=**} { allow read, write: if false; }
+  }
+}
