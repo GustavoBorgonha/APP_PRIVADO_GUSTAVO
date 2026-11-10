@@ -286,7 +286,7 @@ label > input, label > select, label > textarea { margin-top: 6px; color: var(--
 .panda-svg .zzz.d2 { animation-delay: 1.8s; }
 .panda-svg .lagrima { animation: lagrima 1.8s ease-in infinite; }
 @media (prefers-color-scheme: dark) {
-  .panda-svg [fill="#26282e"] { stroke: rgba(255, 255, 255, .22); stroke-width: 2; }
+  .panda-svg .pelo { stroke: rgba(255, 255, 255, .18); stroke-width: 1.5; }
 }
 
 @keyframes flutuar { 0%, 100% { transform: translateY(0) rotate(-2deg); } 50% { transform: translateY(-6px) rotate(2deg); } }
