@@ -18,7 +18,7 @@
   const ACESSORIOS = {
     cabeca: { '': 'Nada', chapeu: 'Chapéu de pescador', bone: 'Boné virado', bandana: 'Bandana ninja (placa)', faixa: 'Faixa de luta', fone: 'Fone de ouvido' },
     rosto: { '': 'Nada', oculos: 'Óculos escuros', bambuBoca: 'Bambu na boca' },
-    roupa: { '': 'Nada', cachecol: 'Cachecol vermelho', casaco: 'Casaquinho' },
+    roupa: { '': 'Nada', cachecol: 'Cachecol vermelho', casaco: 'Casaquinho', dino: 'Fantasia de dinossauro', moletom: 'Moletom rosa' },
     mao: { '': 'Nada', bambu: 'Segurando bambu' },
   };
 
@@ -112,9 +112,18 @@
   function PandaSVG(o = {}) {
     const h = HUMORES.includes(o.humor) ? o.humor : 'fofo';
     const casaco = o.roupa === 'casaco';
+    const ROUPA = { casaco: [MARROM], dino: ['#8fc79a', '#5f9b6b'], moletom: ['#f4a6c0', '#d77b9d'] }[o.roupa];
+    const vestido = !!ROUPA;
     const bambu = o.mao === 'bambu';
-    const corpo = casaco ? MARROM : B;
-    const manga = casaco ? MARROM : P;
+    const corpo = vestido ? ROUPA[0] : B;
+    const manga = vestido ? ROUPA[0] : P;
+
+    // Capuz (dinossauro e moletom) fica atrás da cabeça.
+    const capuz = (o.roupa === 'dino' ? `<path d="M54 50 L58 20 L78 38 Z M86 34 L100 6 L114 34 Z M146 50 L142 20 L122 38 Z" fill="#6aa877" stroke="${ROUPA[1]}" stroke-width="2.5" stroke-linejoin="round"/>` : '') +
+      (o.roupa === 'dino' || o.roupa === 'moletom' ? `<ellipse cx="100" cy="90" rx="74" ry="63" fill="${ROUPA[0]}" stroke="${ROUPA[1]}" stroke-width="3"/>` : '');
+    const orelhas = o.roupa === 'dino' ? '' : `<circle cx="52" cy="46" r="20" fill="${P}"/><circle cx="148" cy="46" r="20" fill="${P}"/>`;
+    const rabo = o.roupa === 'dino' ? `<path d="M140 176 Q186 186 196 150 Q182 160 172 158 Q160 166 146 162 Z" fill="${ROUPA[0]}" stroke="${ROUPA[1]}" stroke-width="2.5" stroke-linejoin="round"/>` +
+      `<path d="M176 160 l6 -9 l4 10 M186 156 l7 -7 l2 10" fill="#6aa877" stroke="${ROUPA[1]}" stroke-width="2" stroke-linejoin="round"/>` : '';
     const fx = o.efeitos === false ? '' : efeitos(h);
 
     const pes = [70, 130].map(x => `<ellipse cx="${x}" cy="184" rx="20" ry="13" fill="${P}"/><circle cx="${x}" cy="186" r="6" fill="${ROSA}"/>` +
@@ -122,16 +131,19 @@
 
     const barriga = `<ellipse cx="100" cy="150" rx="54" ry="42" fill="${corpo}" stroke="${C}" stroke-width="3"/>` +
       (casaco ? `<ellipse cx="100" cy="158" rx="17" ry="32" fill="${B}"/><path d="M83 128 L100 150 L117 128" fill="none" stroke="#7a5034" stroke-width="3" stroke-linejoin="round"/>` +
-        `<circle cx="100" cy="164" r="2.6" fill="#7a5034"/><circle cx="100" cy="176" r="2.6" fill="#7a5034"/>` : '');
+        `<circle cx="100" cy="164" r="2.6" fill="#7a5034"/><circle cx="100" cy="176" r="2.6" fill="#7a5034"/>` : '') +
+      (o.roupa === 'dino' ? `<ellipse cx="100" cy="160" rx="30" ry="27" fill="#e3f3d6"/><path d="M76 150 h48 M72 162 h56 M76 174 h48" stroke="#b9dca5" stroke-width="2.5" stroke-linecap="round"/>` : '') +
+      (o.roupa === 'moletom' ? `<path d="M76 158 h48 l5 22 h-58 z" fill="#e98fae" stroke="#d77b9d" stroke-width="2" stroke-linejoin="round"/>` +
+        `<path d="M92 140 v16 M108 140 v16" stroke="${B}" stroke-width="2.5" stroke-linecap="round"/><circle cx="92" cy="158" r="2.6" fill="${B}"/><circle cx="108" cy="158" r="2.6" fill="${B}"/>` : '');
 
     const vara = bambu ? `<g transform="rotate(10 164 140)"><rect x="156" y="52" width="15" height="136" rx="7.5" fill="${VERDE}" stroke="${VERDE_E}" stroke-width="2.5"/>` +
       `<path d="M156 84h15M156 116h15M156 150h15" stroke="${VERDE_E}" stroke-width="2.5"/>` +
       `<path d="M171 112 q14 -9 20 -3 q-9 8 -20 3z" fill="#9ad38a" stroke="${VERDE_E}" stroke-width="2"/></g>` : '';
 
-    const bracoE = `<ellipse cx="54" cy="150" rx="15" ry="24" transform="rotate(25 54 150)" fill="${manga}"/>` + (casaco ? `<circle cx="44" cy="171" r="9" fill="${P}"/>` : '');
+    const bracoE = `<ellipse cx="54" cy="150" rx="15" ry="24" transform="rotate(25 54 150)" fill="${manga}"/>` + (vestido ? `<circle cx="44" cy="171" r="9" fill="${P}"/>` : '');
     const bracoD = bambu
-      ? `<ellipse cx="152" cy="142" rx="15" ry="24" transform="rotate(-55 152 142)" fill="${manga}"/>` + (casaco ? `<circle cx="170" cy="130" r="9" fill="${P}"/>` : '')
-      : `<ellipse cx="146" cy="150" rx="15" ry="24" transform="rotate(-25 146 150)" fill="${manga}"/>` + (casaco ? `<circle cx="156" cy="171" r="9" fill="${P}"/>` : '');
+      ? `<ellipse cx="152" cy="142" rx="15" ry="24" transform="rotate(-55 152 142)" fill="${manga}"/>` + (vestido ? `<circle cx="170" cy="130" r="9" fill="${P}"/>` : '')
+      : `<ellipse cx="146" cy="150" rx="15" ry="24" transform="rotate(-25 146 150)" fill="${manga}"/>` + (vestido ? `<circle cx="156" cy="171" r="9" fill="${P}"/>` : '');
 
     const cachecol = o.roupa === 'cachecol'
       ? `<path d="M50 134 Q100 158 150 134 L153 149 Q100 173 47 149 Z" fill="${VERMELHO}" stroke="${VERMELHO_E}" stroke-width="2"/>` +
@@ -141,7 +153,7 @@
       : '';
 
     const cabeca = `<g class="cabeca">
-      <circle cx="52" cy="46" r="20" fill="${P}"/><circle cx="148" cy="46" r="20" fill="${P}"/>
+      ${capuz}${orelhas}
       <ellipse cx="100" cy="90" rx="64" ry="54" fill="${B}" stroke="${C}" stroke-width="3"/>
       <ellipse cx="74" cy="92" rx="15" ry="19" transform="rotate(30 74 92)" fill="${P}"/>
       <ellipse cx="126" cy="92" rx="15" ry="19" transform="rotate(-30 126 92)" fill="${P}"/>
@@ -157,7 +169,7 @@
     </g>`;
 
     return `<svg class="panda-svg h-${h}" viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">` +
-      vara + barriga + pes + bracoE + bracoD + cabeca + cachecol + fx + `</svg>`;
+      rabo + vara + barriga + pes + bracoE + bracoD + cabeca + cachecol + fx + `</svg>`;
   }
 
   g.PandaSVG = PandaSVG;
