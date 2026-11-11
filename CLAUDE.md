@@ -25,7 +25,7 @@ PWA em JavaScript puro (sem framework, sem build) para finanças pessoais e plan
   ✌️ (feliz) e golpe de kung fu (bravo). Acessórios ficam no localStorage (`apg-panda`), por aparelho,
   e são escolhidos no "Provador do panda" da aba Dados (`vSeuPanda`: cartões com mini pandas).
   `icons/panda.svg` e `icons/icon.svg` são gerados a partir do `PandaSVG`. Fonte Outfit em `fonts/`.
-- `app.js` — toda a lógica e as telas (Início, Finanças, Planos, Simulador, Dados).
+- `app.js` — toda a lógica e as telas (Início, Finanças, Planos, Dados).
   O estado fica em `db = { lancamentos, planos }`; toda mudança chama `salvar()` e `render()`.
 - `nuvem.js` — login e sincronização. `App.sincronizar(db)` envia só o que mudou; os
   `onSnapshot` chamam `App.receber()`.

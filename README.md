@@ -12,7 +12,6 @@ instalado no celular como aplicativo, inclusive offline.
   - lista de custos previstos x pagos (já vem com sugestões para cada tipo)
   - registro do dinheiro guardado
   - checklist de tarefas e anotações
-- **🧮 Simulador** de financiamento (Price e SAC) para casa e carro.
 - **⚙️ Dados** — backup e restauração (JSON).
 
 ## Acesso e dados

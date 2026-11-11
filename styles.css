@@ -220,7 +220,6 @@ label > input, label > select, label > textarea { margin-top: 6px; color: var(--
 .tabela td.num, .tabela th.num { text-align: right; }
 .tabela input { padding: 6px 10px; border-radius: 10px; }
 .rolagem { overflow-x: auto; }
-.rolagem.alta { max-height: 420px; overflow-y: auto; }
 
 /* ---------- Barras de progresso (degradê aurora) ---------- */
 .barra { height: 10px; background: var(--soft-2); border-radius: 99px; overflow: hidden; }
@@ -460,7 +459,7 @@ button { -webkit-tap-highlight-color: transparent; }
 }
 
 /* ---------- Atalhos (ações rápidas) ---------- */
-.atalhos { display: grid; grid-template-columns: repeat(6, 1fr); gap: 10px; margin-bottom: 26px; }
+.atalhos { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; margin-bottom: 26px; }
 .atalho {
   display: flex; flex-direction: column; align-items: center; gap: 8px;
   background: none; border: 0; padding: 6px 2px; cursor: pointer;

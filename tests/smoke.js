@@ -79,10 +79,6 @@ async function modoLocal(navegador, url, erros) {
   await p.click('.nav >> text=Planos');
   confere(await p.isVisible('text=Nosso casamento'), 'dados continuam após recarregar a página');
 
-  await p.click('.nav >> text=Simulador');
-  await p.fill('#sim [name=valor]', '100000'); await p.fill('#sim [name=entrada]', '0');
-  await p.fill('#sim [name=prazo]', '10'); await p.fill('#sim [name=juros]', '0');
-  confere((await p.textContent('#sim-res .card:nth-child(2) .val')).includes('10.000,00'), 'simulador: 100 mil em 10x sem juros = 10 mil');
   await ctx.close();
 }
 

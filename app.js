@@ -121,7 +121,6 @@ const IC = {
   receita: svg('<path d="M12 19V5M6 11l6-6 6 6"/>'),
   despesa: svg('<path d="M12 5v14M6 13l6 6 6-6"/>'),
   alvo: svg('<circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="4.5"/><circle cx="12" cy="12" r=".8" fill="currentColor"/>'),
-  calc: svg('<rect x="5" y="3" width="14" height="18" rx="3"/><path d="M8.5 7.500h7M8.5 12h.01M12 12h.01M15.5 12h.01M8.5 16h.01M12 16h.01M15.5 16h.01"/>'),
   extrato: svg('<path d="M6 3.500h12v17l-3-2-3 2-3-2-3 2zM9 8.500h6M9 12.500h6"/>'),
   baixar: svg('<path d="M12 4v11M7 11l5 5 5-5M5 20h14"/>'),
   seta: svg('<path d="M9 6l6 6-6 6"/>'),
@@ -158,7 +157,7 @@ function render() {
   if (App.modo === 'carregando') { $('#app').innerHTML = `<div class="carregando">${panda()}Carregando seus dados…</div>`; return; }
   if (App.modo === 'login') { $('#app').innerHTML = vLogin(); return; }
   document.querySelectorAll('.nav button').forEach(b => b.classList.toggle('ativo', b.dataset.v === ui.aba));
-  const views = { inicio: vInicio, financas: vFinancas, planos: vPlanos, simulador: vSimulador, dados: vDados };
+  const views = { inicio: vInicio, financas: vFinancas, planos: vPlanos, dados: vDados };
   const tela = ui.aba + '|' + (ui.aba === 'planos' ? ui.plano || '' : '');
   const trocou = tela !== render.tela; render.tela = tela;
   const app = $('#app');
@@ -166,7 +165,6 @@ function render() {
   app.innerHTML = views[ui.aba]();
   if (trocou) { void app.offsetWidth; app.classList.add('entrando'); window.scrollTo(0, 0); }
   Panda.atualizar();
-  if (ui.aba === 'simulador') calcularSimulacao();
 }
 
 /* Humor "de fundo" do panda: fica tristinho com o saldo do mês no vermelho. */
@@ -243,7 +241,6 @@ function vInicio() {
       ${atalho('novoLanc', 'despesa', IC.despesa, 'Despesa')}
       ${atalho('novoPlano', '', IC.alvo, 'Novo plano')}
       ${atalho('aba', 'financas', IC.extrato, 'Extrato')}
-      ${atalho('aba', 'simulador', IC.calc, 'Simular')}
       ${atalho('exportarCSV', '', IC.baixar, 'Planilha')}
     </div>
 
@@ -390,54 +387,6 @@ function vPlano(p) {
     </div>
     <div class="card"><h2>Anotações</h2>
       <textarea rows="4" data-c="notas" data-p="${p.id}" placeholder="Ideias, links, contatos de fornecedores…">${esc(p.notas || '')}</textarea></div>`;
-}
-
-function vSimulador() {
-  return `
-    <h1>Simulador de financiamento</h1>
-    <p class="sub">Para casa, carro ou qualquer compra parcelada. Compare tabela Price e SAC.</p>
-    <div class="cols-2" style="grid-template-columns:1fr 1.4fr">
-      <div class="card"><form class="form" id="sim" onsubmit="return false">
-        <label class="full">Valor do bem (R$)<input name="valor" type="number" step="0.01" min="0" value="300000"></label>
-        <label>Entrada (R$)<input name="entrada" type="number" step="0.01" min="0" value="60000"></label>
-        <label>Prazo (meses)<input name="prazo" type="number" min="1" max="600" value="360"></label>
-        <label>Juros ao ano (%)<input name="juros" type="number" step="0.01" min="0" value="10.5"></label>
-        <label>Sistema<select name="sistema"><option value="price">Price (parcelas iguais)</option><option value="sac">SAC (parcelas decrescentes)</option></select></label>
-      </form>
-      <p class="muted small" style="margin-bottom:0">Simulação aproximada, sem seguros e taxas do banco (que normalmente aumentam a parcela).</p></div>
-      <div id="sim-res"></div>
-    </div>`;
-}
-
-function calcularSimulacao() {
-  const f = $('#sim'); if (!f) return;
-  const v = parseValor(f.valor.value), e = parseValor(f.entrada.value);
-  const n = Math.max(1, Math.min(600, parseInt(f.prazo.value) || 1));
-  const i = Math.pow(1 + parseValor(f.juros.value) / 100, 1 / 12) - 1;
-  const P = Math.max(0, v - e);
-  const linhas = [];
-  let saldo = P;
-  const pmt = i ? P * i / (1 - Math.pow(1 + i, -n)) : P / n;
-  for (let k = 1; k <= n; k++) {
-    const juros = saldo * i;
-    const amort = f.sistema.value === 'price' ? pmt - juros : P / n;
-    saldo = Math.max(0, saldo - amort);
-    linhas.push({ k, parcela: amort + juros, juros, amort, saldo });
-  }
-  const total = soma(linhas, l => l.parcela);
-  $('#sim-res').innerHTML = `
-    <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(150px,1fr))">
-      <div class="card stat"><div class="rot">Valor financiado</div><div class="val">${brl(P)}</div></div>
-      <div class="card stat"><div class="rot">1ª parcela</div><div class="val">${brl(linhas[0]?.parcela)}</div></div>
-      <div class="card stat"><div class="rot">Última parcela</div><div class="val">${brl(linhas[n - 1]?.parcela)}</div></div>
-      <div class="card stat"><div class="rot">Total de juros</div><div class="val neg">${brl(total - P)}</div></div>
-      <div class="card stat"><div class="rot">Total pago (c/ entrada)</div><div class="val">${brl(total + e)}</div></div>
-      <div class="card stat"><div class="rot">Juros ao mês</div><div class="val">${(i * 100).toFixed(3).replace('.', ',')}%</div></div>
-    </div>
-    <div class="card"><h2>Parcelas</h2><div class="rolagem alta"><table class="tabela">
-      <thead><tr><th>#</th><th class="num">Parcela</th><th class="num">Juros</th><th class="num">Amortização</th><th class="num">Saldo</th></tr></thead>
-      <tbody>${linhas.map(l => `<tr><td>${l.k}</td><td class="num">${brl(l.parcela)}</td><td class="num muted">${brl(l.juros)}</td><td class="num muted">${brl(l.amort)}</td><td class="num">${brl(l.saldo)}</td></tr>`).join('')}</tbody>
-    </table></div></div>`;
 }
 
 function vDados() {
@@ -696,7 +645,6 @@ document.addEventListener('change', e => {
   salvar(); render();
 });
 
-document.addEventListener('input', e => { if (e.target.closest('#sim')) calcularSimulacao(); });
 
 document.addEventListener('submit', e => {
   const f = e.target, tipo = f.dataset.f; if (!tipo) return;
