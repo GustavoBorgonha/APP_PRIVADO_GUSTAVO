@@ -17,6 +17,9 @@ PWA em JavaScript puro (sem framework, sem build) para finanças pessoais e plan
 
 - `index.html`, `styles.css` — estrutura e visual (tema claro/escuro, celular/computador).
   Visual inspirado no app Toki: base preto/branco, degradê pastel, cards arredondados, botões em pílula.
+  Telas no padrão de app de banco: cartão de saldo (`.hero`) com botão do olho para ocultar valores
+  (`ui.oculto`; use `din()` para dinheiro na tela), atalhos (`.atalhos`), extrato por dia (`itemExtrato`).
+  Animação de entrada só ao trocar de tela (classe `entrando` no `#app`); janelas viram "folha" no celular.
   Mascote: panda em `panda.js` (`PandaSVG` desenha humores/acessórios; `Mascote` cuida de reações,
   cochilo por inatividade e falas). Acessórios ficam no localStorage (`apg-panda`), por aparelho.
   `icons/panda.svg` e `icons/icon.svg` são gerados a partir do `PandaSVG`. Fonte Outfit em `fonts/`.

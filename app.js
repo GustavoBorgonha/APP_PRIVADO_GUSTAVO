@@ -43,6 +43,8 @@ const TIPOS = {
 const $ = (s, el = document) => el.querySelector(s);
 const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
 const brl = v => (Number(v) || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+// Valor em dinheiro na tela; vira "••••" quando o usuário oculta os valores (botão do olho).
+const din = v => `<span class="din">${ui.oculto ? 'R$ ••••' : brl(v)}</span>`;
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const hoje = () => new Date().toLocaleDateString('sv'); // AAAA-MM-DD no fuso local
 const mesAtual = () => hoje().slice(0, 7);
@@ -108,7 +110,38 @@ function salvar() {
 /* App: estado da conexão. modo = 'local' | 'carregando' | 'login' | 'nuvem' */
 const App = window.App = { modo: 'local', usuario: null, msgLogin: '' };
 let db = carregar();
-const ui = { aba: 'inicio', mes: mesAtual(), plano: null, filtro: 'todos' };
+const ui = { aba: 'inicio', mes: mesAtual(), plano: null, filtro: 'todos', oculto: false };
+try { ui.oculto = localStorage.getItem('apg-oculto') === '1'; } catch (e) { /* sem armazenamento */ }
+
+/* ---------- ícones e rótulos ---------- */
+const svg = d => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${d}</svg>`;
+const IC = {
+  olho: svg('<path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12z"/><circle cx="12" cy="12" r="3"/>'),
+  olhoFechado: svg('<path d="M4 4l16 16M9.9 5.8A9 9 0 0 1 12 5.5c6 0 9.5 6.5 9.5 6.500a15.6 15.6 0 0 1-3.3 3.900M6.3 7.700A15.3 15.3 0 0 0 2.5 12S6 18.5 12 18.500a9 9 0 0 0 3.6-.8M9.9 9.900a3 3 0 0 0 4.2 4.2"/>'),
+  receita: svg('<path d="M12 19V5M6 11l6-6 6 6"/>'),
+  despesa: svg('<path d="M12 5v14M6 13l6 6 6-6"/>'),
+  alvo: svg('<circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="4.5"/><circle cx="12" cy="12" r=".8" fill="currentColor"/>'),
+  calc: svg('<rect x="5" y="3" width="14" height="18" rx="3"/><path d="M8.5 7.500h7M8.5 12h.01M12 12h.01M15.5 12h.01M8.5 16h.01M12 16h.01M15.5 16h.01"/>'),
+  extrato: svg('<path d="M6 3.500h12v17l-3-2-3 2-3-2-3 2zM9 8.500h6M9 12.500h6"/>'),
+  baixar: svg('<path d="M12 4v11M7 11l5 5 5-5M5 20h14"/>'),
+  seta: svg('<path d="M9 6l6 6-6 6"/>'),
+  voltar: svg('<path d="M15 6l-6 6 6 6"/>'),
+};
+const ICONE_CAT = {
+  'Moradia': '🏠', 'Alimentação': '🍽️', 'Mercado': '🛒', 'Transporte': '🚌', 'Saúde': '💊', 'Educação': '📚',
+  'Lazer': '🎉', 'Contas': '🧾', 'Compras': '🛍️', 'Assinaturas': '📺', 'Investimentos': '📈', 'Outros': '📦',
+  'Salário': '💼', 'Renda extra': '✨', 'Rendimentos': '📈', 'Reembolso': '↩️',
+};
+const iconeCat = (cat, tipo) => ICONE_CAT[cat] || (tipo === 'receita' ? '💵' : '🧾');
+const DIAS = ['domingo', 'segunda', 'terça', 'quarta', 'quinta', 'sexta', 'sábado'];
+function rotuloDia(d) {
+  if (d === hoje()) return 'Hoje';
+  const [a, m, dia] = d.split('-').map(Number), dt = new Date(a, m - 1, dia);
+  const ontem = new Date(); ontem.setDate(ontem.getDate() - 1);
+  if (dt.toDateString() === ontem.toDateString()) return 'Ontem';
+  const nome = DIAS[dt.getDay()];
+  return `${nome[0].toUpperCase()}${nome.slice(1)}, ${dia} de ${NOMES_MES[m - 1]}`;
+}
 
 const plano = id => db.planos.find(p => p.id === id);
 const guardado = p => soma(p.aportes, a => a.valor);
@@ -126,7 +159,12 @@ function render() {
   if (App.modo === 'login') { $('#app').innerHTML = vLogin(); return; }
   document.querySelectorAll('.nav button').forEach(b => b.classList.toggle('ativo', b.dataset.v === ui.aba));
   const views = { inicio: vInicio, financas: vFinancas, planos: vPlanos, simulador: vSimulador, dados: vDados };
-  $('#app').innerHTML = views[ui.aba]();
+  const tela = ui.aba + '|' + (ui.aba === 'planos' ? ui.plano || '' : '');
+  const trocou = tela !== render.tela; render.tela = tela;
+  const app = $('#app');
+  app.classList.remove('entrando');
+  app.innerHTML = views[ui.aba]();
+  if (trocou) { void app.offsetWidth; app.classList.add('entrando'); window.scrollTo(0, 0); }
   Panda.atualizar();
   if (ui.aba === 'simulador') calcularSimulacao();
 }
@@ -151,15 +189,30 @@ function cardPlano(p) {
   const meta = metaDe(p), g = guardado(p), pct = meta ? Math.min(100, g / meta * 100) : 0;
   const meses = mesesAte(p.dataAlvo), falta = Math.max(0, meta - g);
   let porMes = '';
-  if (falta > 0 && meses !== null) porMes = meses > 0 ? `Guardar ${brl(falta / meses)}/mês` : '<span class="neg">Prazo vencido</span>';
+  if (falta > 0 && meses !== null) porMes = meses > 0 ? `Guardar ${din(falta / meses)}/mês` : '<span class="neg">Prazo vencido</span>';
   const tipo = TIPOS[p.tipo] || TIPOS.outro;
   return `<div class="card plano" data-a="abrirPlano" data-v="${p.id}">
     <div class="cab"><span class="emoji">${tipo.emoji}</span><div><div class="nome">${esc(p.nome)}</div>
       <div class="muted small">${tipo.nome}${p.dataAlvo ? ' · ' + fmtData(p.dataAlvo) : ''}</div></div></div>
     <div class="barra"><i style="width:${pct}%"></i></div>
-    <div class="linha"><span>${brl(g)} de ${brl(meta)}</span><strong>${pct.toFixed(0)}%</strong></div>
+    <div class="linha"><span>${din(g)} de ${din(meta)}</span><strong>${pct.toFixed(0)}%</strong></div>
     <div class="linha muted"><span>${porMes || (falta <= 0 && meta ? '<span class="pos">Meta atingida 🎉</span>' : '')}</span></div>
   </div>`;
+}
+
+// Uma linha do extrato (estilo app de banco): ícone, descrição, categoria e valor.
+function itemExtrato(x, opc = {}) {
+  return `<div class="mov" data-a="editarLanc" data-v="${x.id}" role="button" tabindex="0" title="Editar">
+    <span class="mov-ic ${x.tipo}">${iconeCat(x.categoria, x.tipo)}</span>
+    <span class="mov-txt"><strong>${esc(x.desc)}${x.fixo ? ' <span class="fixo" title="Lançamento fixo">🔁</span>' : ''}</strong>
+      <small>${esc(x.categoria)}${opc.data ? ' · ' + fmtData(x.data).slice(0, 5) : ''}</small></span>
+    <span class="mov-val ${x.tipo === 'receita' ? 'pos' : ''}">${x.tipo === 'receita' ? '+' : '−'} ${din(x.valor)}</span>
+    ${opc.apagar ? `<button class="x" data-a="apagarLanc" data-v="${x.id}" title="Apagar" aria-label="Apagar lançamento">✕</button>` : ''}
+  </div>`;
+}
+
+function botaoOlho() {
+  return `<button class="olho" data-a="olho" aria-label="${ui.oculto ? 'Mostrar valores' : 'Ocultar valores'}" title="${ui.oculto ? 'Mostrar valores' : 'Ocultar valores'}">${ui.oculto ? IC.olhoFechado : IC.olho}</button>`;
 }
 
 function vInicio() {
@@ -167,27 +220,50 @@ function vInicio() {
   const rec = soma(l.filter(x => x.tipo === 'receita'), x => x.valor);
   const des = soma(l.filter(x => x.tipo === 'despesa'), x => x.valor);
   const totalGuardado = soma(db.planos, guardado);
-  const pendentes = db.planos.flatMap(p => p.tarefas.filter(t => !t.feito).map(t => ({ ...t, plano: p }))).slice(0, 8);
+  const ultimos = db.lancamentos.slice().sort((a, b) => b.data.localeCompare(a.data)).slice(0, 5);
+  const pendentes = db.planos.flatMap(p => p.tarefas.filter(t => !t.feito).map(t => ({ ...t, plano: p }))).slice(0, 6);
+  const atalho = (acao, valor, icone, rotulo) => `<button class="atalho" data-a="${acao}" ${valor ? `data-v="${valor}"` : ''}><span class="at-ic">${icone}</span><span>${rotulo}</span></button>`;
   return `
     <div class="hero">
-      <div><h1>Olá, ${esc(App.usuario?.nome?.split(' ')[0] || 'Gustavo')}!</h1>
-        <p class="sub">Aqui está o resumo de ${nomeMes(mesAtual())}.</p></div>
+      <div class="hero-txt">
+        <p class="ola">Olá, ${esc(App.usuario?.nome?.split(' ')[0] || 'Gustavo')}</p>
+        <div class="rot">Saldo de ${NOMES_MES[+mesAtual().slice(5) - 1]} ${botaoOlho()}</div>
+        <div class="saldo-val ${rec - des < 0 ? 'neg' : ''}">${din(rec - des)}</div>
+        <div class="chips">
+          <span class="chip"><i class="seta pos">${IC.receita}</i>Receitas <b>${din(rec)}</b></span>
+          <span class="chip"><i class="seta neg">${IC.despesa}</i>Despesas <b>${din(des)}</b></span>
+          <span class="chip"><i class="seta">${IC.alvo}</i>Guardado <b>${din(totalGuardado)}</b></span>
+        </div>
+      </div>
       ${Panda.html('no-hero')}
     </div>
-    <div class="grid">
-      <div class="card stat"><div class="rot">Receitas do mês</div><div class="val pos">${brl(rec)}</div></div>
-      <div class="card stat"><div class="rot">Despesas do mês</div><div class="val neg">${brl(des)}</div></div>
-      <div class="card stat"><div class="rot">Saldo do mês</div><div class="val ${rec - des < 0 ? 'neg' : ''}">${brl(rec - des)}</div></div>
-      <div class="card stat"><div class="rot">Guardado nos planos</div><div class="val">${brl(totalGuardado)}</div></div>
+
+    <div class="atalhos">
+      ${atalho('novoLanc', 'receita', IC.receita, 'Receita')}
+      ${atalho('novoLanc', 'despesa', IC.despesa, 'Despesa')}
+      ${atalho('novoPlano', '', IC.alvo, 'Novo plano')}
+      ${atalho('aba', 'financas', IC.extrato, 'Extrato')}
+      ${atalho('aba', 'simulador', IC.calc, 'Simular')}
+      ${atalho('exportarCSV', '', IC.baixar, 'Planilha')}
     </div>
-    <div class="topo"><h2 style="margin:0">Meus planos</h2>
-      <div class="acoes"><button class="btn" data-a="novoLanc">+ Lançamento</button><button class="btn pri" data-a="novoPlano">+ Novo plano</button></div></div>
-    ${db.planos.length ? `<div class="planos">${db.planos.map(cardPlano).join('')}</div>`
+
+    <div class="topo secao"><h2>Meus planos</h2><button class="link" data-a="novoPlano">+ Novo plano</button></div>
+    ${db.planos.length ? `<div class="planos carrossel">${db.planos.map(cardPlano).join('')}</div>`
       : `<div class="card vazio">${panda('preguica')}Nenhum plano ainda. Crie um para sua viagem, casamento, casa ou carro.</div>`}
-    ${pendentes.length ? `<div class="card" style="margin-top:16px"><h2>Próximas tarefas</h2>
-      ${pendentes.map(t => `<div class="tarefa"><input type="checkbox" data-c="tarefaFeita" data-p="${t.plano.id}" data-i="${t.id}">
-        <span>${esc(t.texto)}</span><span class="muted small" style="flex:0">${TIPOS[t.plano.tipo]?.emoji || ''} ${esc(t.plano.nome)}</span></div>`).join('')}
-    </div>` : ''}`;
+
+    <div class="cols-2" style="margin-top:22px">
+      <div class="card">
+        <div class="topo secao"><h2>Últimos lançamentos</h2><button class="link" data-a="aba" data-v="financas">Ver extrato ${IC.seta}</button></div>
+        ${ultimos.length ? `<div class="movs">${ultimos.map(x => itemExtrato(x, { data: true })).join('')}</div>`
+      : '<p class="muted small" style="margin:0">Seus lançamentos mais recentes aparecem aqui.</p>'}
+      </div>
+      <div class="card">
+        <div class="topo secao"><h2>Próximas tarefas</h2><button class="link" data-a="aba" data-v="planos">Ver planos ${IC.seta}</button></div>
+        ${pendentes.length ? pendentes.map(t => `<div class="tarefa"><input type="checkbox" data-c="tarefaFeita" data-p="${t.plano.id}" data-i="${t.id}">
+          <span>${esc(t.texto)}</span><span class="muted small">${TIPOS[t.plano.tipo]?.emoji || ''} ${esc(t.plano.nome)}</span></div>`).join('')
+      : '<p class="muted small" style="margin:0">As tarefas pendentes dos seus planos aparecem aqui.</p>'}
+      </div>
+    </div>`;
 }
 
 function vFinancas() {
@@ -197,48 +273,51 @@ function vFinancas() {
   const porCat = {};
   l.filter(x => x.tipo === 'despesa').forEach(x => porCat[x.categoria] = (porCat[x.categoria] || 0) + x.valor);
   const cats = Object.entries(porCat).sort((a, b) => b[1] - a[1]);
-  const max = cats[0]?.[1] || 1;
   const visiveis = ui.filtro === 'todos' ? l : l.filter(x => x.tipo === ui.filtro);
+  const dias = [];
+  visiveis.forEach(x => { const d = dias[dias.length - 1]; if (d && d.data === x.data) d.itens.push(x); else dias.push({ data: x.data, itens: [x] }); });
+  const [ano, mes] = ui.mes.split('-');
   return `
     <div class="topo">
-      <div><h1>Finanças</h1><p class="sub" style="margin:0">Sua planilha de receitas e despesas</p></div>
-      <div class="acoes">
-        <button class="btn mini" data-a="mes" data-v="-1" aria-label="Mês anterior">◀</button>
-        <input type="month" value="${ui.mes}" data-c="mes" style="width:auto">
-        <button class="btn mini" data-a="mes" data-v="1" aria-label="Próximo mês">▶</button>
+      <div><h1>Finanças</h1><p class="sub" style="margin:0">Seu extrato de receitas e despesas</p></div>
+      <div class="mes-nav">
+        <button data-a="mes" data-v="-1" aria-label="Mês anterior">${IC.voltar}</button>
+        <span class="mes-rot">${NOMES_MES[+mes - 1]} <small>${ano}</small></span>
+        <button data-a="mes" data-v="1" aria-label="Próximo mês">${IC.seta}</button>
       </div>
     </div>
-    <div class="grid">
-      <div class="card stat"><div class="rot">Receitas</div><div class="val pos">${brl(rec)}</div></div>
-      <div class="card stat"><div class="rot">Despesas</div><div class="val neg">${brl(des)}</div></div>
-      <div class="card stat"><div class="rot">Saldo</div><div class="val ${rec - des < 0 ? 'neg' : ''}">${brl(rec - des)}</div></div>
-      <div class="card stat"><div class="rot">Taxa de economia</div><div class="val">${rec ? ((rec - des) / rec * 100).toFixed(0) : 0}%</div></div>
+    <div class="hero compacto">
+      <div class="hero-txt">
+        <div class="rot">Saldo do mês ${botaoOlho()}</div>
+        <div class="saldo-val ${rec - des < 0 ? 'neg' : ''}">${din(rec - des)}</div>
+        <div class="chips">
+          <span class="chip"><i class="seta pos">${IC.receita}</i>Receitas <b>${din(rec)}</b></span>
+          <span class="chip"><i class="seta neg">${IC.despesa}</i>Despesas <b>${din(des)}</b></span>
+          <span class="chip">Economia <b>${rec ? ((rec - des) / rec * 100).toFixed(0) : 0}%</b></span>
+        </div>
+      </div>
     </div>
-    <div class="acoes" style="margin-bottom:16px">
+    <div class="acoes rolavel" style="margin-bottom:18px">
       <button class="btn pri" data-a="novoLanc">+ Lançamento</button>
+      ${ui.mes !== mesAtual() ? '<button class="btn" data-a="mesHoje">Voltar para este mês</button>' : ''}
       <button class="btn" data-a="copiarMes">Copiar fixos do mês anterior</button>
-      <button class="btn" data-a="exportarCSV">Exportar planilha (CSV)</button>
-      <button class="btn" data-a="importarCSV">Importar planilha (CSV)</button>
+      <button class="btn" data-a="exportarCSV">Exportar planilha</button>
+      <button class="btn" data-a="importarCSV">Importar planilha</button>
     </div>
-    <div class="cols-2" style="grid-template-columns:2fr 1fr">
+    <div class="cols-2" style="grid-template-columns:1.7fr 1fr">
       <div class="card">
-        <div class="topo" style="margin-bottom:8px"><h2 style="margin:0">Lançamentos</h2>
-          <select data-c="filtro" style="width:auto">
-            ${['todos', 'receita', 'despesa'].map(f => `<option value="${f}" ${ui.filtro === f ? 'selected' : ''}>${{ todos: 'Todos', receita: 'Receitas', despesa: 'Despesas' }[f]}</option>`).join('')}
-          </select></div>
-        ${visiveis.length ? `<div class="rolagem"><table class="tabela">
-          <thead><tr><th>Data</th><th>Descrição</th><th>Categoria</th><th class="num">Valor</th><th></th></tr></thead>
-          <tbody>${visiveis.map(x => `<tr>
-            <td>${fmtData(x.data).slice(0, 5)}</td>
-            <td>${esc(x.desc)}${x.fixo ? ' <span class="muted small">🔁</span>' : ''}</td>
-            <td class="muted">${esc(x.categoria)}</td>
-            <td class="num ${x.tipo === 'receita' ? 'pos' : 'neg'}">${x.tipo === 'receita' ? '+' : '−'} ${brl(x.valor)}</td>
-            <td class="num" style="white-space:nowrap"><button class="x" data-a="editarLanc" data-v="${x.id}" title="Editar">✏️</button><button class="x" data-a="apagarLanc" data-v="${x.id}" title="Apagar">✕</button></td>
-          </tr>`).join('')}</tbody></table></div>`
+        <div class="topo secao"><h2>Extrato</h2>
+          <div class="filtros">${[['todos', 'Tudo'], ['receita', 'Receitas'], ['despesa', 'Despesas']].map(([f, r]) =>
+            `<button class="${ui.filtro === f ? 'on' : ''}" data-a="filtro" data-v="${f}">${r}</button>`).join('')}</div></div>
+        ${dias.length ? dias.map(d => `
+          <div class="dia"><span>${rotuloDia(d.data)}</span><span>${din(soma(d.itens, x => x.tipo === 'receita' ? x.valor : -x.valor))}</span></div>
+          <div class="movs">${d.itens.map(x => itemExtrato(x, { apagar: true })).join('')}</div>`).join('')
       : `<div class="vazio">${panda('preguica')}Nenhum lançamento em ${nomeMes(ui.mes)}.</div>`}
       </div>
-      <div class="card"><h2>Despesas por categoria</h2>
-        ${cats.length ? cats.map(([c, v]) => `<div class="cat"><span>${esc(c)}</span><div class="barra"><i style="width:${v / max * 100}%"></i></div><span class="small">${brl(v)}</span></div>`).join('')
+      <div class="card"><h2>Para onde foi o dinheiro</h2>
+        ${cats.length ? `<div class="pilha">${cats.map(([c, v], i) => `<i class="c${i % 8}" style="flex:${v}" title="${esc(c)}"></i>`).join('')}</div>` +
+        cats.map(([c, v], i) => `<div class="cat"><span class="ponto c${i % 8}"></span><span>${iconeCat(c, 'despesa')} ${esc(c)}</span>
+          <span class="muted small">${(v / des * 100).toFixed(0)}%</span><span class="small">${din(v)}</span></div>`).join('')
       : '<div class="muted small">Sem despesas no mês.</div>'}
       </div>
     </div>`;
@@ -262,16 +341,16 @@ function vPlano(p) {
   const feitas = p.tarefas.filter(t => t.feito).length;
   return `
     <div class="topo">
-      <div><button class="btn mini" data-a="voltar">← Planos</button>
+      <div><button class="btn mini voltar" data-a="voltar">${IC.voltar} Planos</button>
         <h1 style="margin-top:10px">${tipo.emoji} ${esc(p.nome)}</h1>
         <p class="sub" style="margin:0">${tipo.nome}${p.dataAlvo ? ' · data alvo ' + fmtData(p.dataAlvo) : ''}</p></div>
       <div class="acoes"><button class="btn" data-a="editarPlano" data-v="${p.id}">Editar</button><button class="btn perigo" data-a="apagarPlano" data-v="${p.id}">Excluir</button></div>
     </div>
     <div class="grid">
-      <div class="card stat"><div class="rot">Meta ${p.meta ? '' : '(soma dos custos)'}</div><div class="val">${brl(meta)}</div></div>
-      <div class="card stat"><div class="rot">Já guardado</div><div class="val pos">${brl(g)}</div></div>
-      <div class="card stat"><div class="rot">Falta</div><div class="val">${brl(falta)}</div></div>
-      <div class="card stat"><div class="rot">Guardar por mês</div><div class="val">${falta <= 0 ? '—' : meses === null ? '<span class="small muted">defina a data</span>' : meses > 0 ? brl(falta / meses) : '<span class="neg small">prazo vencido</span>'}</div>
+      <div class="card stat"><div class="rot">Meta ${p.meta ? '' : '(soma dos custos)'}</div><div class="val">${din(meta)}</div></div>
+      <div class="card stat"><div class="rot">Já guardado</div><div class="val pos">${din(g)}</div></div>
+      <div class="card stat"><div class="rot">Falta</div><div class="val">${din(falta)}</div></div>
+      <div class="card stat"><div class="rot">Guardar por mês</div><div class="val">${falta <= 0 ? '—' : meses === null ? '<span class="small muted">defina a data</span>' : meses > 0 ? din(falta / meses) : '<span class="neg small">prazo vencido</span>'}</div>
         ${meses > 0 && falta > 0 ? `<div class="muted small">por ${meses} ${meses === 1 ? 'mês' : 'meses'}</div>` : ''}</div>
     </div>
     <div class="card"><div class="barra" style="height:12px"><i style="width:${pct}%"></i></div>
@@ -286,7 +365,7 @@ function vPlano(p) {
           <td class="num"><input type="number" step="0.01" min="0" value="${i.pago || ''}" placeholder="0,00" data-c="item" data-p="${p.id}" data-i="${i.id}" data-f="pago" style="width:120px;text-align:right" aria-label="Pago"></td>
           <td class="num"><button class="x" data-a="apagarItem" data-p="${p.id}" data-v="${i.id}" title="Remover">✕</button></td></tr>`).join('')}
         </tbody>
-        <tfoot><tr><th>Total</th><th class="num">${brl(previsto(p))}</th><th class="num">${brl(pago(p))}</th><th></th></tr></tfoot>
+        <tfoot><tr><th>Total</th><th class="num">${din(previsto(p))}</th><th class="num">${din(pago(p))}</th><th></th></tr></tfoot>
       </table></div>
       <form class="add" data-f="addItem" data-p="${p.id}"><input name="desc" placeholder="Novo item de custo" required><input name="previsto" type="number" step="0.01" min="0" placeholder="Valor" style="max-width:130px"><button class="btn">Adicionar</button></form>
     </div>
@@ -294,7 +373,7 @@ function vPlano(p) {
     <div class="cols-2">
       <div class="card"><h2>Dinheiro guardado</h2>
         ${p.aportes.length ? `<table class="tabela"><tbody>${p.aportes.slice().sort((a, b) => b.data.localeCompare(a.data)).map(a => `<tr>
-          <td>${fmtData(a.data)}</td><td class="muted">${esc(a.obs || '')}</td><td class="num ${a.valor < 0 ? 'neg' : 'pos'}">${brl(a.valor)}</td>
+          <td>${fmtData(a.data)}</td><td class="muted">${esc(a.obs || '')}</td><td class="num ${a.valor < 0 ? 'neg' : 'pos'}">${din(a.valor)}</td>
           <td class="num"><button class="x" data-a="apagarAporte" data-p="${p.id}" data-v="${a.id}" title="Remover">✕</button></td></tr>`).join('')}</tbody></table>`
       : '<div class="muted small">Registre aqui cada valor que você separar para este plano.</div>'}
         <form class="add" data-f="addAporte" data-p="${p.id}" style="flex-wrap:wrap">
@@ -414,9 +493,9 @@ function abrirModal(html, aoSalvar) {
 function fecharModal() { modal.close(); aoSalvarModal = null; }
 modal.addEventListener('click', e => { if (e.target === modal) fecharModal(); });
 
-function modalLanc(l) {
+function modalLanc(l, tipoInicial) {
   const novo = !l;
-  l = l || { tipo: 'despesa', desc: '', categoria: '', valor: '', data: ui.aba === 'financas' && ui.mes !== mesAtual() ? ui.mes + '-01' : hoje(), fixo: false };
+  l = l || { tipo: tipoInicial === 'receita' ? 'receita' : 'despesa', desc: '', categoria: '', valor: '', data: ui.aba === 'financas' && ui.mes !== mesAtual() ? ui.mes + '-01' : hoje(), fixo: false };
   abrirModal(`
     <h2>${novo ? 'Novo lançamento' : 'Editar lançamento'}</h2>
     <form class="form" data-f="modal">
@@ -514,7 +593,10 @@ async function importarCSV() {
 const acoes = {
   aba: v => { ui.aba = v; ui.plano = null; },
   mes: v => { ui.mes = mesDesloc(ui.mes, +v); },
-  novoLanc: () => modalLanc(),
+  novoLanc: v => modalLanc(null, v),
+  filtro: v => { ui.filtro = v; },
+  mesHoje: () => { ui.mes = mesAtual(); },
+  olho: () => { ui.oculto = !ui.oculto; try { localStorage.setItem('apg-oculto', ui.oculto ? '1' : '0'); } catch (e) { /* sem armazenamento */ } },
   editarLanc: v => modalLanc(db.lancamentos.find(l => l.id === v)),
   apagarLanc: v => {
     if (!confirm('Apagar este lançamento?')) return;
@@ -573,6 +655,11 @@ document.addEventListener('click', e => {
   const r = fn(el.dataset.v, el);
   if (r instanceof Promise) return;
   if (!modal.open) { salvar(); render(); }
+});
+
+// Teclado: Enter/Espaço ativam as linhas clicáveis do extrato.
+document.addEventListener('keydown', e => {
+  if ((e.key === 'Enter' || e.key === ' ') && e.target.matches('[role=button][data-a]')) { e.preventDefault(); e.target.click(); }
 });
 
 document.addEventListener('change', e => {

@@ -55,16 +55,16 @@ async function modoLocal(navegador, url, erros) {
   await p.goto(url);
   confere(await p.isVisible('.nav'), 'abre direto, sem login');
 
-  await p.click('text=+ Lançamento');
+  await p.click('.atalho >> text=Despesa');
   await p.selectOption('#lanc-tipo', 'receita');
   await p.fill('[name=valor]', '8000'); await p.fill('[name=desc]', 'Salário');
   await p.click('dialog >> text=Salvar');
   confere(await p.isVisible('.hero .balao.on') && await p.isVisible('.hero .panda-svg.h-feliz'), 'panda fica feliz com a receita');
-  await p.click('text=+ Lançamento');
+  await p.click('.atalho >> text=Despesa');
   await p.fill('[name=valor]', '2500'); await p.fill('[name=desc]', 'Aluguel'); await p.fill('[name=categoria]', 'Moradia');
   await p.click('dialog >> text=Salvar');
   await p.click('.nav >> text=Início');
-  const saldo = await p.textContent('.grid .card:nth-child(3) .val');
+  const saldo = await p.textContent('.hero .saldo-val');
   confere(saldo.replace(/\s/g, ' ').includes('5.500,00'), 'saldo do mês = 8000 − 2500');
 
   await p.click('text=+ Novo plano');
@@ -109,7 +109,7 @@ async function modoNuvem(navegador, url, erros) {
   await p.waitForSelector('text=Olá, Maria');
   confere(true, 'e-mail autorizado entra');
 
-  await p.click('text=+ Lançamento');
+  await p.click('.atalho >> text=Despesa');
   await p.fill('[name=valor]', '120'); await p.fill('[name=desc]', 'Mercado');
   await p.click('dialog >> text=Salvar');
   await p.waitForFunction(() => window.__store.lancamentos.size === 1);

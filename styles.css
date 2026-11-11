@@ -398,3 +398,235 @@ body.sem-nav main { max-width: none; }
 .login h1 { font-size: 32px; }
 .login .aviso { text-align: left; }
 .login .btn.pri { width: 100%; padding: 14px; font-size: 16px; margin-top: 8px; }
+
+/* =========================================================
+   Camada "banco": saldo em destaque, atalhos, extrato e
+   movimento mais fluido (entrada das telas, janelas, toques).
+   ========================================================= */
+:root {
+  --acento: #f2711c;
+  --acento-suave: #fff0e4;
+  --mola: cubic-bezier(.34, 1.56, .64, 1);
+  --suave: cubic-bezier(.2, .8, .2, 1);
+}
+@media (prefers-color-scheme: dark) {
+  :root { --acento: #ff8f45; --acento-suave: rgba(255, 143, 69, .14); }
+}
+html { scroll-behavior: smooth; }
+button { -webkit-tap-highlight-color: transparent; }
+:focus-visible { outline: 2px solid var(--acento); outline-offset: 2px; }
+
+/* ---------- Saldo em destaque ---------- */
+.hero { align-items: stretch; }
+.hero-txt { min-width: 0; flex: 1; display: flex; flex-direction: column; justify-content: center; }
+.hero .mascote { align-self: center; }
+.ola { margin: 0 0 14px; font-size: 17px; font-weight: 600; letter-spacing: -.01em; }
+.hero .rot { display: flex; align-items: center; gap: 6px; color: var(--muted); font-size: 14px; font-weight: 500; }
+.saldo-val {
+  font-size: 44px; line-height: 1.1; font-weight: 600; letter-spacing: -.03em;
+  font-variant-numeric: tabular-nums; margin: 2px 0 16px;
+}
+.hero.compacto { padding: 22px 28px; border-radius: 28px; }
+.hero.compacto .saldo-val { font-size: 36px; margin-bottom: 14px; }
+.olho {
+  display: inline-grid; place-items: center; width: 34px; height: 34px;
+  border: 0; border-radius: 999px; background: none; color: var(--muted); cursor: pointer;
+  transition: background .15s, color .15s, transform .2s var(--mola);
+}
+.olho:hover { background: var(--line); color: var(--text); }
+.olho:active { transform: scale(.85); }
+.olho svg { width: 20px; height: 20px; }
+
+.chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.chip {
+  display: inline-flex; align-items: center; gap: 6px;
+  background: var(--glass); border: 1px solid var(--line); border-radius: 999px;
+  padding: 6px 12px 6px 7px; font-size: 13px; color: var(--muted); white-space: nowrap;
+  -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px);
+}
+.chip b { color: var(--text); font-weight: 600; font-variant-numeric: tabular-nums; }
+.chip .seta { display: grid; place-items: center; width: 22px; height: 22px; border-radius: 999px; background: var(--soft-2); color: var(--muted); }
+.chip .seta svg { width: 13px; height: 13px; stroke-width: 2.6; }
+.chip .seta.pos { background: color-mix(in srgb, var(--green) 16%, transparent); color: var(--green); }
+.chip .seta.neg { background: color-mix(in srgb, var(--red) 14%, transparent); color: var(--red); }
+.chip:not(:has(.seta)) { padding-left: 12px; }
+.din { font-variant-numeric: tabular-nums; }
+
+@media (max-width: 520px) {
+  .saldo-val { font-size: 34px; }
+  .hero.compacto .saldo-val { font-size: 30px; }
+  .hero .mascote { width: 92px; align-self: flex-start; }
+  .ola { margin-bottom: 10px; }
+}
+
+/* ---------- Atalhos (ações rápidas) ---------- */
+.atalhos { display: grid; grid-template-columns: repeat(6, 1fr); gap: 10px; margin-bottom: 26px; }
+.atalho {
+  display: flex; flex-direction: column; align-items: center; gap: 8px;
+  background: none; border: 0; padding: 6px 2px; cursor: pointer;
+  font-size: 13px; font-weight: 500; color: var(--text); border-radius: 20px;
+}
+.at-ic {
+  display: grid; place-items: center; width: 58px; height: 58px; border-radius: 22px;
+  background: var(--card); border: 1px solid var(--line); box-shadow: var(--shadow); color: var(--acento);
+  transition: transform .25s var(--mola), box-shadow .2s, background .2s, color .2s;
+}
+.at-ic svg { width: 24px; height: 24px; }
+.atalho:hover .at-ic { transform: translateY(-3px); box-shadow: var(--shadow-alta); background: var(--acento); color: #fff; border-color: transparent; }
+.atalho:active .at-ic { transform: scale(.9); }
+@media (max-width: 620px) {
+  /* No celular os atalhos rolam de lado, como em app de banco. */
+  .atalhos { display: flex; overflow-x: auto; gap: 6px; margin: 0 -16px 22px; padding: 4px 16px 6px; scrollbar-width: none; scroll-snap-type: x proximity; }
+  .atalhos::-webkit-scrollbar { display: none; }
+  .atalho { flex: 0 0 76px; scroll-snap-align: start; font-size: 12.5px; }
+}
+
+/* ---------- Títulos de seção e links ---------- */
+.topo.secao { margin-bottom: 12px; flex-wrap: nowrap; }
+.topo.secao h2 { margin: 0; }
+.link {
+  display: inline-flex; align-items: center; gap: 2px; background: none; border: 0; cursor: pointer;
+  color: var(--acento); font-weight: 600; font-size: 14px; padding: 6px 8px; border-radius: 999px; white-space: nowrap;
+  transition: background .15s;
+}
+.link:hover { background: var(--acento-suave); }
+.link svg { width: 16px; height: 16px; transition: transform .2s var(--suave); }
+.link:hover svg { transform: translateX(3px); }
+
+/* ---------- Extrato ---------- */
+.movs { display: flex; flex-direction: column; }
+.mov {
+  display: flex; align-items: center; gap: 12px; padding: 10px 8px; margin: 0 -8px;
+  border-radius: 16px; cursor: pointer; transition: background .15s, transform .15s;
+}
+.mov:hover { background: var(--soft); }
+.mov:active { transform: scale(.985); }
+.mov-ic {
+  display: grid; place-items: center; width: 44px; height: 44px; flex-shrink: 0;
+  border-radius: 16px; background: var(--soft); font-size: 20px;
+}
+.mov-ic.receita { background: color-mix(in srgb, var(--green) 13%, var(--card)); }
+.mov-txt { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.mov-txt strong { font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mov-txt small { color: var(--muted); font-size: 13px; }
+.mov-txt .fixo { font-size: 11px; opacity: .7; }
+.mov-val { font-weight: 600; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.mov .x { opacity: 0; transition: opacity .15s; margin-right: -4px; }
+.mov:hover .x, .mov:focus-within .x { opacity: 1; }
+@media (hover: none) { .mov .x { opacity: .55; } }
+.dia {
+  display: flex; justify-content: space-between; gap: 10px;
+  font-size: 12.5px; font-weight: 600; color: var(--muted);
+  padding: 14px 0 4px; border-top: 1px solid var(--line); margin-top: 6px;
+}
+.topo.secao + .dia { border-top: 0; margin-top: 0; padding-top: 4px; }
+
+.filtros { display: inline-flex; background: var(--soft); border-radius: 999px; padding: 3px; }
+.filtros button {
+  border: 0; background: none; cursor: pointer; padding: 6px 13px; border-radius: 999px;
+  font-size: 13px; font-weight: 500; color: var(--muted); transition: background .2s, color .2s, box-shadow .2s;
+}
+.filtros button.on { background: var(--card); color: var(--text); box-shadow: 0 1px 3px rgba(0, 0, 0, .12); }
+
+.mes-nav {
+  display: inline-flex; align-items: center; gap: 2px;
+  background: var(--card); border: 1px solid var(--line); border-radius: 999px; padding: 4px; box-shadow: var(--shadow);
+}
+.mes-nav button {
+  display: grid; place-items: center; width: 36px; height: 36px; border: 0; border-radius: 999px;
+  background: none; cursor: pointer; color: var(--text); transition: background .15s, transform .2s var(--mola);
+}
+.mes-nav button:hover { background: var(--soft); }
+.mes-nav button:active { transform: scale(.85); }
+.mes-nav svg { width: 18px; height: 18px; }
+.mes-rot { min-width: 132px; text-align: center; font-weight: 600; text-transform: capitalize; }
+.mes-rot small { color: var(--muted); font-weight: 500; font-size: 13px; }
+
+.acoes.rolavel { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; margin-left: -4px; padding: 4px; }
+.acoes.rolavel::-webkit-scrollbar { display: none; }
+@media (max-width: 760px) { .acoes.rolavel { margin: 0 -16px; padding: 4px 16px; } }
+
+/* Categorias: barra empilhada + legenda */
+.pilha { display: flex; gap: 3px; height: 14px; margin: 4px 0 14px; }
+.pilha i { display: block; min-width: 6px; border-radius: 6px; transform-origin: left; }
+.pilha i:first-child { border-radius: 99px 6px 6px 99px; }
+.pilha i:last-child { border-radius: 6px 99px 99px 6px; }
+.pilha i:only-child { border-radius: 99px; }
+.cat { grid-template-columns: 10px 1fr auto auto; }
+.ponto { width: 10px; height: 10px; border-radius: 99px; }
+.c0 { background: #f2711c; } .c1 { background: #7c6cf0; } .c2 { background: #2bb8a3; } .c3 { background: #e86fa8; }
+.c4 { background: #f0b429; } .c5 { background: #4c9be8; } .c6 { background: #8bc34a; } .c7 { background: #9aa0a6; }
+
+/* ---------- Planos em carrossel no celular ---------- */
+@media (max-width: 760px) {
+  .planos.carrossel {
+    display: flex; overflow-x: auto; gap: 12px; margin: 0 -16px; padding: 4px 16px 14px;
+    scroll-snap-type: x mandatory; scrollbar-width: none;
+  }
+  .planos.carrossel::-webkit-scrollbar { display: none; }
+  .planos.carrossel .plano { flex: 0 0 82%; scroll-snap-align: center; }
+  .planos.carrossel .plano:only-child { flex-basis: 100%; }
+}
+.btn.voltar { display: inline-flex; align-items: center; gap: 2px; padding-left: 8px; }
+.btn.voltar svg { width: 16px; height: 16px; }
+
+/* ---------- Movimento ---------- */
+/* Entrada das telas: os blocos sobem em sequência (só ao trocar de tela). */
+@keyframes entrar { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
+@keyframes crescer { from { transform: scaleX(0); } to { transform: none; } }
+#app.entrando > * { animation: entrar .5s var(--suave) both; }
+#app.entrando > :nth-child(2) { animation-delay: .05s; }
+#app.entrando > :nth-child(3) { animation-delay: .1s; }
+#app.entrando > :nth-child(4) { animation-delay: .15s; }
+#app.entrando > :nth-child(5) { animation-delay: .2s; }
+#app.entrando > :nth-child(n+6) { animation-delay: .25s; }
+#app.entrando .barra > i, #app.entrando .pilha i { transform-origin: left; animation: crescer .8s var(--suave) .25s both; }
+#app.entrando .atalho { animation: entrar .45s var(--mola) both; }
+#app.entrando .atalho:nth-child(2) { animation-delay: .04s; }
+#app.entrando .atalho:nth-child(3) { animation-delay: .08s; }
+#app.entrando .atalho:nth-child(4) { animation-delay: .12s; }
+#app.entrando .atalho:nth-child(5) { animation-delay: .16s; }
+#app.entrando .atalho:nth-child(6) { animation-delay: .2s; }
+
+/* Menu: a pílula ativa "assenta" com efeito de mola */
+.nav button { transition: background .25s var(--suave), color .2s, transform .2s var(--mola); }
+.nav button:active { transform: scale(.93); }
+.nav button.ativo .ic { animation: assentar .4s var(--mola); }
+@keyframes assentar { from { transform: scale(.7); } to { transform: none; } }
+
+.card { transition: box-shadow .2s, transform .2s var(--suave); }
+.btn { transition: background .15s, transform .2s var(--mola), box-shadow .15s; }
+
+/* Janelas: surgem com mola no computador e sobem como "folha" no celular */
+@keyframes janela { from { opacity: 0; transform: translateY(16px) scale(.96); } to { opacity: 1; transform: none; } }
+@keyframes folha { from { transform: translateY(100%); } to { transform: none; } }
+@keyframes fundo { from { opacity: 0; } to { opacity: 1; } }
+dialog[open] { animation: janela .32s var(--mola); }
+dialog[open]::backdrop { animation: fundo .25s ease-out; }
+@media (max-width: 600px) {
+  dialog {
+    margin: auto 0 0; width: 100vw; max-width: 100vw; max-height: 92vh;
+    border-radius: 30px 30px 0 0; border-width: 1px 0 0;
+    padding: 14px 20px calc(24px + env(safe-area-inset-bottom));
+  }
+  dialog::before { content: ''; display: block; width: 42px; height: 5px; border-radius: 99px; background: var(--soft-2); margin: 0 auto 16px; }
+  dialog[open] { animation: folha .36s var(--suave); }
+  .modal-acoes { position: sticky; bottom: 0; }
+  .modal-acoes .btn { flex: 1; padding: 13px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  #app.entrando > *, #app.entrando .atalho, #app.entrando .barra > i, #app.entrando .pilha i,
+  dialog[open], dialog[open]::backdrop, .nav button.ativo .ic { animation: none !important; }
+}
+
+/* Celular: panda no canto do cartão de saldo e chips rolando de lado */
+@media (max-width: 520px) {
+  .hero .mascote { position: absolute; top: 14px; right: 16px; width: 80px; }
+  .hero .balao { bottom: auto; top: 86%; right: 10%; border-radius: 18px 4px 18px 18px; }
+  .hero .ola, .hero .rot { padding-right: 90px; }
+  .hero.compacto .rot { padding-right: 0; }
+  .chips { flex-wrap: nowrap; overflow-x: auto; margin: 0 -22px; padding: 0 22px; scrollbar-width: none; }
+  .chips::-webkit-scrollbar { display: none; }
+}
