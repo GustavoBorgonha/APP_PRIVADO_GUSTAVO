@@ -8,7 +8,7 @@
 const CHAVE = 'apg-dados-v1';
 
 const CATEGORIAS = {
-  despesa: ['Moradia', 'Alimentação', 'Mercado', 'Transporte', 'Saúde', 'Educação', 'Lazer', 'Contas', 'Compras', 'Assinaturas', 'Investimentos', 'Outros'],
+  despesa: ['Moradia', 'Alimentação', 'Mercado', 'Transporte', 'Saúde', 'Educação', 'Lazer', 'Contas', 'Compras', 'Assinaturas', 'Cuidados pessoais', 'Cartão de crédito', 'Tarifas bancárias', 'Investimentos', 'Outros'],
   receita: ['Salário', 'Renda extra', 'Rendimentos', 'Reembolso', 'Outros'],
 };
 
@@ -91,6 +91,20 @@ function escolherArquivo(accept) {
   });
 }
 
+// Lê um arquivo de texto escolhido pelo usuário, acertando a codificação (extratos de banco).
+function lerArquivo(accept) {
+  return new Promise(res => {
+    const i = Object.assign(document.createElement('input'), { type: 'file', accept });
+    i.onchange = () => {
+      const f = i.files[0]; if (!f) return res(null);
+      const r = new FileReader();
+      r.onload = () => res({ nome: f.name, texto: Extrato.decodificar(r.result) });
+      r.readAsArrayBuffer(f);
+    };
+    i.click();
+  });
+}
+
 /* ---------- dados ---------- */
 function vazio() { return { versao: 1, lancamentos: [], planos: [] }; }
 function carregar() {
@@ -122,6 +136,7 @@ const IC = {
   despesa: svg('<path d="M12 5v14M6 13l6 6 6-6"/>'),
   alvo: svg('<circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="4.5"/><circle cx="12" cy="12" r=".8" fill="currentColor"/>'),
   extrato: svg('<path d="M6 3.500h12v17l-3-2-3 2-3-2-3 2zM9 8.500h6M9 12.500h6"/>'),
+  importar: svg('<path d="M12 15V4M7 8l5-5 5 5M5 20h14"/>'),
   baixar: svg('<path d="M12 4v11M7 11l5 5 5-5M5 20h14"/>'),
   seta: svg('<path d="M9 6l6 6-6 6"/>'),
   voltar: svg('<path d="M15 6l-6 6 6 6"/>'),
@@ -129,6 +144,7 @@ const IC = {
 const ICONE_CAT = {
   'Moradia': '🏠', 'Alimentação': '🍽️', 'Mercado': '🛒', 'Transporte': '🚌', 'Saúde': '💊', 'Educação': '📚',
   'Lazer': '🎉', 'Contas': '🧾', 'Compras': '🛍️', 'Assinaturas': '📺', 'Investimentos': '📈', 'Outros': '📦',
+  'Cuidados pessoais': '💈', 'Cartão de crédito': '💳', 'Tarifas bancárias': '🏦',
   'Salário': '💼', 'Renda extra': '✨', 'Rendimentos': '📈', 'Reembolso': '↩️',
 };
 const iconeCat = (cat, tipo) => ICONE_CAT[cat] || (tipo === 'receita' ? '💵' : '🧾');
@@ -158,7 +174,7 @@ function render() {
   if (App.modo === 'login') { $('#app').innerHTML = vLogin(); return; }
   document.querySelectorAll('.nav button').forEach(b => b.classList.toggle('ativo', b.dataset.v === ui.aba));
   const views = { inicio: vInicio, financas: vFinancas, planos: vPlanos, dados: vDados };
-  const tela = ui.aba + '|' + (ui.aba === 'planos' ? ui.plano || '' : '');
+  const tela = ui.aba + '|' + (ui.aba === 'planos' ? ui.plano || '' : ui.aba === 'financas' && ui.triagem ? 'triagem' : '');
   const trocou = tela !== render.tela; render.tela = tela;
   const app = $('#app');
   app.classList.remove('entrando');
@@ -241,6 +257,7 @@ function vInicio() {
       ${atalho('novoLanc', 'despesa', IC.despesa, 'Despesa')}
       ${atalho('novoPlano', '', IC.alvo, 'Novo plano')}
       ${atalho('aba', 'financas', IC.extrato, 'Extrato')}
+      ${atalho('importarExtrato', '', IC.importar, 'Importar extrato')}
       ${atalho('exportarCSV', '', IC.baixar, 'Planilha')}
     </div>
 
@@ -264,6 +281,7 @@ function vInicio() {
 }
 
 function vFinancas() {
+  if (ui.triagem) return vTriagem();
   const l = lancMes(ui.mes).sort((a, b) => b.data.localeCompare(a.data));
   const rec = soma(l.filter(x => x.tipo === 'receita'), x => x.valor);
   const des = soma(l.filter(x => x.tipo === 'despesa'), x => x.valor);
@@ -299,6 +317,7 @@ function vFinancas() {
       ${ui.mes !== mesAtual() ? '<button class="btn" data-a="mesHoje">Voltar para este mês</button>' : ''}
       <button class="btn" data-a="copiarMes">Copiar fixos do mês anterior</button>
       <button class="btn" data-a="exportarCSV">Exportar planilha</button>
+      <button class="btn" data-a="importarExtrato">Importar extrato do banco</button>
       <button class="btn" data-a="importarCSV">Importar planilha</button>
     </div>
     <div class="cols-2" style="grid-template-columns:1.7fr 1fr">
@@ -319,6 +338,77 @@ function vFinancas() {
       </div>
     </div>`;
 }
+
+/* ---------- triagem de extrato importado ----------
+   Os movimentos lidos do arquivo ficam em ui.triagem (só na memória) e NÃO entram nas
+   finanças sozinhos: cada um precisa de "Confirmar". "Ignorar" descarta. */
+function cartaoTriagem(i) {
+  const campo = (f, extra) => `data-c="tri" data-i="${i.id}" data-f="${f}" ${extra || ''}`;
+  return `<div class="card tri">
+    <div class="tri-topo">
+      <span class="mov-ic ${i.tipo}">${iconeCat(i.categoria, i.tipo)}</span>
+      <div class="tri-orig"><small>No extrato · ${fmtData(i.data)}</small><span>${esc(i.bruto)}</span></div>
+      <strong class="tri-valor ${i.tipo === 'receita' ? 'pos' : ''}">${i.tipo === 'receita' ? '+' : '−'} ${din(i.valor)}</strong>
+    </div>
+    ${i.avisos.map(a => `<p class="tri-aviso">⚠️ ${esc(a)}</p>`).join('')}
+    <div class="tri-campos">
+      <label class="larga">Descrição<input ${campo('desc')} value="${esc(i.desc)}"></label>
+      <label>Categoria<input ${campo('categoria', `list="cats-${i.tipo}"`)} value="${esc(i.categoria)}"></label>
+      <label>Tipo<select ${campo('tipo')}>
+        <option value="despesa" ${i.tipo === 'despesa' ? 'selected' : ''}>Despesa</option>
+        <option value="receita" ${i.tipo === 'receita' ? 'selected' : ''}>Receita</option></select></label>
+      <label>Data<input type="date" ${campo('data')} value="${i.data}"></label>
+      <label>Valor (R$)<input type="number" step="0.01" min="0" ${campo('valor')} value="${i.valor}"></label>
+    </div>
+    <div class="tri-acoes">
+      <label class="tri-fixo"><input type="checkbox" ${campo('fixo')} ${i.fixo ? 'checked' : ''}> Repete todo mês</label>
+      <button class="btn" data-a="triIgnorar" data-v="${i.id}">Ignorar</button>
+      <button class="btn pri" data-a="triConfirmar" data-v="${i.id}">✓ Confirmar</button>
+    </div>
+  </div>`;
+}
+
+function vTriagem() {
+  const t = ui.triagem, total = t.itens.length;
+  const pend = t.itens.filter(i => i.estado === 'pendente');
+  const ok = t.itens.filter(i => i.estado === 'ok'), ign = t.itens.filter(i => i.estado === 'ignorado');
+  const feitos = total - pend.length;
+  return `
+    <div class="topo">
+      <div><button class="btn mini voltar" data-a="sairTriagem">${IC.voltar} Finanças</button>
+        <h1 style="margin-top:10px">Triagem do extrato</h1>
+        <p class="sub" style="margin:0">${esc(t.arquivo)} · nada entra nas suas finanças sem você confirmar.</p></div>
+    </div>
+    <div class="card tri-progresso">
+      <div class="linha" style="margin:0 0 8px"><strong>${feitos} de ${total} revisados</strong>
+        <span class="muted">${ok.length} ${ok.length === 1 ? 'confirmado' : 'confirmados'} · ${ign.length} ${ign.length === 1 ? 'ignorado' : 'ignorados'}</span></div>
+      <div class="barra"><i style="width:${total ? feitos / total * 100 : 0}%"></i></div>
+    </div>
+    ${['despesa', 'receita'].map(tp => `<datalist id="cats-${tp}">${CATEGORIAS[tp].map(c => `<option value="${c}">`).join('')}</datalist>`).join('')}
+    ${pend.length ? `<div class="tri-lista">${pend.map(cartaoTriagem).join('')}</div>`
+      : `<div class="card vazio">${panda('feliz')}<strong style="color:var(--text);font-size:17px">Tudo revisado!</strong><br>
+          ${ok.length} ${ok.length === 1 ? 'lançamento confirmado' : 'lançamentos confirmados'} e ${ign.length} ${ign.length === 1 ? 'ignorado' : 'ignorados'}.
+          <div class="acoes" style="justify-content:center;margin-top:14px"><button class="btn pri" data-a="sairTriagem">Concluir</button></div></div>`}
+    ${feitos ? `<details class="card tri-feitos" ${pend.length ? '' : 'open'}><summary>Já revisados (${feitos})</summary>
+      ${[...ok, ...ign].map(i => `<div class="mov tri-feito ${i.estado}">
+        <span class="mov-ic ${i.tipo}">${i.estado === 'ok' ? iconeCat(i.categoria, i.tipo) : '🚫'}</span>
+        <span class="mov-txt"><strong>${esc(i.desc)}</strong><small>${i.estado === 'ok' ? esc(i.categoria) : 'Ignorado'} · ${fmtData(i.data)}</small></span>
+        <span class="mov-val ${i.tipo === 'receita' ? 'pos' : ''}">${i.tipo === 'receita' ? '+' : '−'} ${din(i.valor)}</span>
+        <button class="btn mini" data-a="triDesfazer" data-v="${i.id}">Desfazer</button></div>`).join('')}
+    </details>` : ''}`;
+}
+
+async function importarExtrato() {
+  const arq = await lerArquivo('.ofx,.csv,.txt'); if (!arq) return;
+  let itens = [];
+  try { itens = Extrato.preparar(Extrato.lerArquivo(arq.nome, arq.texto), { lancamentos: db.lancamentos, meuNome: App.usuario?.nome }); }
+  catch (e) { console.error(e); }
+  if (!itens.length) return alert('Não encontrei lançamentos neste arquivo. Use o extrato em OFX ou CSV baixado do seu banco.');
+  ui.triagem = { arquivo: arq.nome, itens };
+  ui.aba = 'financas'; ui.plano = null;
+  render();
+}
+const itemTriagem = id => ui.triagem?.itens.find(i => i.id === id);
 
 function vPlanos() {
   if (ui.plano && plano(ui.plano)) return vPlano(plano(ui.plano));
@@ -580,7 +670,32 @@ const acoes = {
     if (novos.length) reagir('feliz', 'Fixos copiados! Menos trabalho 😌');
     alert(`${novos.length} lançamento(s) fixo(s) copiado(s).`);
   },
-  exportarCSV, importarCSV,
+  exportarCSV, importarCSV, importarExtrato,
+  triConfirmar: v => {
+    const i = itemTriagem(v); if (!i) return;
+    const desc = String(i.desc || '').trim(), valor = Math.abs(parseValor(i.valor));
+    if (!desc) return alert('Preencha a descrição antes de confirmar.');
+    if (!valor) return alert('O valor precisa ser maior que zero.');
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(i.data || '')) return alert('Preencha a data antes de confirmar.');
+    const l = { id: uid(), tipo: i.tipo, desc, categoria: String(i.categoria || '').trim() || 'Outros', valor, data: i.data, fixo: !!i.fixo, origem: i.origem };
+    db.lancamentos.push(l);
+    Object.assign(i, { estado: 'ok', lancId: l.id, desc, valor, categoria: l.categoria });
+    if (!ui.triagem.itens.some(x => x.estado === 'pendente')) reagir('feliz', 'Extrato em dia! 🎉', 'Triagem concluída! ✨');
+  },
+  triIgnorar: v => { const i = itemTriagem(v); if (i) i.estado = 'ignorado'; },
+  triDesfazer: v => {
+    const i = itemTriagem(v); if (!i) return;
+    if (i.estado === 'ok') db.lancamentos = db.lancamentos.filter(l => l.id !== i.lancId);
+    i.estado = 'pendente'; delete i.lancId;
+  },
+  sairTriagem: () => {
+    const t = ui.triagem; if (!t) return;
+    const pend = t.itens.filter(i => i.estado === 'pendente').length;
+    if (pend && !confirm(`Ainda ${pend === 1 ? 'há 1 lançamento' : `há ${pend} lançamentos`} sem revisar. Sair mesmo assim?\n(Os já confirmados continuam salvos.)`)) return;
+    const ultimo = t.itens.filter(i => i.estado === 'ok').map(i => i.data).sort().pop();
+    if (ultimo) ui.mes = ultimo.slice(0, 7);
+    ui.triagem = null;
+  },
   novoPlano: v => modalPlano(null, v),
   abrirPlano: v => { ui.aba = 'planos'; ui.plano = v; },
   voltar: () => { ui.plano = null; },
@@ -638,6 +753,13 @@ document.addEventListener('change', e => {
   else if (c === 'tarefaFeita') {
     const t = p.tarefas.find(t => t.id === el.dataset.i); t.feito = el.checked;
     if (t.feito) reagir('feliz', 'Uma a menos! ✅', 'Tarefa feita! Arrasou 💪');
+  }
+  else if (c === 'tri') {
+    // Edição na triagem: só guarda o valor; nada vai para as finanças antes do "Confirmar".
+    const i = itemTriagem(el.dataset.i), f = el.dataset.f; if (!i) return;
+    i[f] = f === 'fixo' ? el.checked : f === 'valor' ? Math.abs(parseValor(el.value)) : el.value;
+    if (f === 'tipo' || f === 'categoria' || f === 'valor') render();
+    return;
   }
   else if (c === 'panda') { Panda.definir(el.dataset.f, el.value); render(); return; }
   else if (c === 'item') { const i = p.itens.find(i => i.id === el.dataset.i); i[el.dataset.f] = el.dataset.f === 'desc' ? el.value : parseValor(el.value); }

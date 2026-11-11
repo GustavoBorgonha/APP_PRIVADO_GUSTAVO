@@ -459,7 +459,7 @@ button { -webkit-tap-highlight-color: transparent; }
 }
 
 /* ---------- Atalhos (ações rápidas) ---------- */
-.atalhos { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; margin-bottom: 26px; }
+.atalhos { display: grid; grid-template-columns: repeat(6, 1fr); gap: 10px; margin-bottom: 26px; }
 .atalho {
   display: flex; flex-direction: column; align-items: center; gap: 8px;
   background: none; border: 0; padding: 6px 2px; cursor: pointer;
@@ -721,3 +721,34 @@ dialog[open]::backdrop { animation: fundo .25s ease-out; }
   .peca-img { width: 54px; }
 }
 @media (prefers-reduced-motion: reduce) { .peca.on::after { animation: none; } }
+
+/* ---------- Triagem do extrato importado ---------- */
+.tri-progresso { padding: 16px 20px; }
+.tri-lista { display: grid; gap: 14px; grid-template-columns: repeat(auto-fill, minmax(380px, 1fr)); margin-bottom: 16px; }
+.tri-lista .card { margin: 0; }
+.tri { padding: 18px; display: flex; flex-direction: column; gap: 12px; }
+.tri-topo { display: flex; align-items: center; gap: 12px; }
+.tri-orig { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.tri-orig small { color: var(--muted); font-size: 12px; font-weight: 500; }
+.tri-orig span { font-size: 13.5px; overflow-wrap: anywhere; }
+.tri-valor { font-size: 18px; font-weight: 600; white-space: nowrap; }
+.tri-aviso {
+  margin: 0; font-size: 13px; line-height: 1.35; padding: 8px 12px; border-radius: 14px;
+  background: color-mix(in srgb, #f0b429 16%, var(--card)); border: 1px solid color-mix(in srgb, #f0b429 40%, transparent);
+}
+.tri-campos { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.tri-campos .larga { grid-column: 1 / -1; }
+.tri-acoes { display: flex; align-items: center; gap: 8px; }
+.tri-fixo { display: flex; align-items: center; gap: 8px; margin-right: auto; cursor: pointer; }
+.tri-feitos summary { cursor: pointer; font-weight: 600; }
+.tri-feitos[open] summary { margin-bottom: 8px; }
+.tri-feito { cursor: default; }
+.tri-feito:hover { background: none; }
+.tri-feito:active { transform: none; }
+.tri-feito.ignorado .mov-txt strong, .tri-feito.ignorado .mov-val { text-decoration: line-through; color: var(--muted); }
+@media (max-width: 520px) {
+  .tri-lista { grid-template-columns: 1fr; }
+  .tri-acoes { flex-wrap: wrap; }
+  .tri-fixo { flex: 1 0 100%; }
+  .tri-acoes .btn { flex: 1; padding: 12px; }
+}

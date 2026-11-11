@@ -7,6 +7,8 @@ instalado no celular como aplicativo, inclusive offline.
 
 - **💰 Finanças** — planilha de receitas e despesas por mês, categorias, saldo, taxa de economia,
   lançamentos fixos (copiar para o mês seguinte) e exportar/importar **CSV** (abre no Excel e Google Sheets).
+- **🏦 Importar extrato do banco** (OFX ou CSV) — os movimentos passam por uma **triagem**: o app sugere
+  descrição e categoria, e você confirma ou ignora um por um. Nada entra sozinho.
 - **🎯 Planos** — viagens e passeios, casamento, compra de casa, compra de carro ou outro objetivo:
   - meta e data alvo, com cálculo de **quanto guardar por mês**
   - lista de custos previstos x pagos (já vem com sugestões para cada tipo)

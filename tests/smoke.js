@@ -82,6 +82,74 @@ async function modoLocal(navegador, url, erros) {
   await ctx.close();
 }
 
+// Extratos de mentira, só para o teste (mesmo formato dos bancos: OFX e CSV com Crédito/Débito).
+const OFX_TESTE = `OFXHEADER:100
+<OFX><BANKTRANLIST>
+<STMTTRN><TRNTYPE>PAYMENT</TRNTYPE><DTPOSTED>20260310</DTPOSTED><TRNAMT>-120.50</TRNAMT><FITID>A1</FITID>
+<MEMO>Pagamento de Titulo: "CONDOMINIO EDIFICIO TESTE"</MEMO><NAME>CONDOMINIO EDIFICIO TESTE</NAME></STMTTRN>
+<STMTTRN><TRNTYPE>CREDIT</TRNTYPE><DTPOSTED>20260305</DTPOSTED><TRNAMT>900.00</TRNAMT><FITID>A2</FITID>
+<MEMO>Pix recebido: "Cp :123-FULANA DE TAL"</MEMO><NAME>Fulana de Tal</NAME></STMTTRN>
+<STMTTRN><TRNTYPE>PAYMENT</TRNTYPE><DTPOSTED>20260304</DTPOSTED><TRNAMT>-30.00</TRNAMT><FITID>A3</FITID>
+<MEMO>Compra no debito: "No estabelecimento LANCHONETE TESTE"</MEMO><NAME>Lanchonete Teste</NAME></STMTTRN>
+</BANKTRANLIST></OFX>`;
+const CSV_TESTE = `Extrato de: Ag: 1 | Conta: 2;;;;;
+Data;Histórico;Docto.;Crédito (R$);Débito (R$);Saldo (R$)
+05/03/2026;TRANSF SALDO C/SAL P/CC;111;2.500,00; ;2.500,00
+06/03/2026;PACOTE DE SERVICOS;222; ;16,65;2.483,35
+;;;;;
+Os dados acima tem como base 10/03/2026;;;;;`;
+
+async function importacaoExtrato(navegador, url, erros) {
+  console.log('Importação de extrato com triagem');
+  const ctx = await navegador.newContext();
+  await ctx.route('**/firebase-config.js', r => r.fulfill({ contentType: 'text/javascript', body: 'window.FIREBASE_CONFIG = null;' }));
+  const p = await ctx.newPage();
+  p.on('pageerror', e => erros.push('extrato: ' + e.message));
+  p.on('dialog', d => d.accept());
+  await p.goto(url);
+  const salvos = () => p.evaluate(() => (JSON.parse(localStorage.getItem('apg-dados-v1')) || { lancamentos: [] }).lancamentos);
+  const importar = async (nome, conteudo) => {
+    const [fc] = await Promise.all([p.waitForEvent('filechooser'), p.click('[data-a=importarExtrato]')]);
+    await fc.setFiles({ name: nome, mimeType: 'text/plain', buffer: Buffer.from(conteudo, 'latin1') });
+    await p.waitForSelector('.tri');
+  };
+  const cartao = texto => p.locator('.tri', { hasText: texto });
+
+  await importar('extrato.ofx', OFX_TESTE);
+  confere(await p.locator('.tri').count() === 3, 'OFX: encontra os 3 movimentos');
+  confere((await salvos()).length === 0, 'nada entra nas finanças antes de confirmar');
+  confere(await cartao('CONDOMINIO').locator('[data-f=desc]').inputValue() === 'Condomínio Edificio Teste', 'pré-preenche a descrição');
+  confere(await cartao('CONDOMINIO').locator('[data-f=categoria]').inputValue() === 'Moradia', 'sugere a categoria');
+
+  await cartao('LANCHONETE').locator('[data-f=desc]').fill('Lanche da tarde');
+  await cartao('LANCHONETE').locator('[data-a=triConfirmar]').click();
+  let l = await salvos();
+  confere(l.length === 1 && l[0].desc === 'Lanche da tarde' && l[0].valor === 30 && l[0].tipo === 'despesa' && l[0].data === '2026-03-04', 'confirmar grava só aquele lançamento, com a edição feita');
+  await cartao('FULANA').locator('[data-a=triIgnorar]').click();
+  confere((await salvos()).length === 1 && await p.locator('.tri').count() === 1, 'ignorar descarta sem gravar');
+  await p.click('.tri-feitos summary');
+  await p.locator('.tri-feito', { hasText: 'Lanche da tarde' }).locator('[data-a=triDesfazer]').click();
+  confere((await salvos()).length === 0 && await p.locator('.tri').count() === 2, 'desfazer tira o lançamento e devolve para a triagem');
+  await cartao('LANCHONETE').locator('[data-a=triConfirmar]').click();
+  await p.click('[data-a=sairTriagem]');   // sai com pendentes (confirma o aviso)
+  confere((await salvos()).length === 1 && await p.isVisible('text=Extrato'), 'sair da triagem mantém só o que foi confirmado');
+
+  await importar('extrato.ofx', OFX_TESTE);
+  confere(await cartao('LANCHONETE').locator('.tri-aviso').count() === 1 && await cartao('CONDOMINIO').locator('.tri-aviso').count() === 0, 'reimportar avisa o que já foi importado');
+  await p.click('[data-a=sairTriagem]');
+
+  await importar('extrato.csv', CSV_TESTE);
+  confere(await p.locator('.tri').count() === 2, 'CSV do banco: lê crédito e débito e ignora o resto');
+  confere(await cartao('C/SAL').locator('[data-f=categoria]').inputValue() === 'Salário' && await cartao('C/SAL').locator('[data-f=tipo]').inputValue() === 'receita', 'CSV: crédito vira receita (salário)');
+  confere(await cartao('PACOTE').locator('[data-f=desc]').inputValue() === 'Pacote de serviços', 'CSV: acerta acentos (arquivo em Latin-1)');
+  await cartao('C/SAL').locator('[data-a=triConfirmar]').click();
+  await cartao('PACOTE').locator('[data-a=triConfirmar]').click();
+  await p.waitForSelector('text=Tudo revisado!');
+  l = await salvos();
+  confere(l.length === 3 && l.some(x => x.valor === 2500 && x.tipo === 'receita') && l.some(x => x.valor === 16.65 && x.tipo === 'despesa'), 'tudo revisado: 3 lançamentos gravados com os valores certos');
+  await ctx.close();
+}
+
 async function modoNuvem(navegador, url, erros) {
   console.log('Modo nuvem (Firebase simulado)');
   const ctx = await navegador.newContext();
@@ -131,6 +199,7 @@ async function modoNuvem(navegador, url, erros) {
   let codigo = 0;
   try {
     await modoLocal(navegador, url, erros);
+    await importacaoExtrato(navegador, url, erros);
     await modoNuvem(navegador, url, erros);
     if (erros.length) throw new Error('Erros de JavaScript na página:\n' + erros.join('\n'));
     console.log('\nTudo certo ✅');

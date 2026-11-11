@@ -27,6 +27,11 @@ PWA em JavaScript puro (sem framework, sem build) para finanças pessoais e plan
   `icons/panda.svg` e `icons/icon.svg` são gerados a partir do `PandaSVG`. Fonte Outfit em `fonts/`.
 - `app.js` — toda a lógica e as telas (Início, Finanças, Planos, Dados).
   O estado fica em `db = { lancamentos, planos }`; toda mudança chama `salvar()` e `render()`.
+- `extrato.js` — lê extratos do banco (OFX e CSV com Crédito/Débito) e sugere descrição/categoria
+  (`Extrato.preparar`). Nunca grava direto: os itens vão para `ui.triagem` e a tela `vTriagem` (em
+  `app.js`) exige "Confirmar" em cada um. O lançamento confirmado guarda `origem` (ex.: `ofx:FITID`)
+  para avisar se o mesmo arquivo for importado de novo. Não versionar extratos reais; os testes usam
+  extratos de mentira.
 - `nuvem.js` — login e sincronização. `App.sincronizar(db)` envia só o que mudou; os
   `onSnapshot` chamam `App.receber()`.
 - `firebase-config.js` — configuração pública do Firebase (não é segredo).
