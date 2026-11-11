@@ -463,20 +463,37 @@ function vDados() {
 }
 
 function vSeuPanda() {
-  const NOMES = { cabeca: 'Cabeça', rosto: 'Rosto', roupa: 'Roupa', mao: 'Mão' };
+  const GRUPOS = { cabeca: ['🎩', 'Na cabeça'], rosto: ['😎', 'No rosto'], roupa: ['🧣', 'Roupinha'], mao: ['🎋', 'Na patinha'] };
   const HUMOR = { fofo: 'Fofo', feliz: 'Feliz', triste: 'Triste', bravo: 'Bravinho', preguica: 'Preguiça', dormindo: 'Dormindo' };
-  return `<div class="card seu-panda"><h2>Seu panda 🐼</h2>
-    <div class="seu-panda-grid">
-      ${Panda.html('previa')}
-      <div>
-        <div class="form">${Object.entries(Panda.ACESSORIOS).map(([campo, ops]) => `<label>${NOMES[campo]}
-          <select data-c="panda" data-f="${campo}">${Object.entries(ops).map(([v, n]) =>
-            `<option value="${v}" ${Panda.prefs[campo] === v ? 'selected' : ''}>${n}</option>`).join('')}</select></label>`).join('')}</div>
-        <div class="acoes" style="margin-top:14px"><button class="btn" data-a="sortearPanda">🎲 Sortear visual</button></div>
-        <p class="muted small" style="margin-bottom:0">Ele reage ao que você faz, cochila quando você some e acorda quando você volta.
-          Cutuque para conversar (mas não exagere 😤). Cada aparelho tem o seu panda.</p>
+  const usando = Object.values(Panda.prefs).filter(Boolean).length;
+  // Cada opção é um cartãozinho com um mini panda usando o acessório.
+  const opcao = (campo, valor, nome) => {
+    const on = (Panda.prefs[campo] || '') === valor;
+    return `<button class="peca ${on ? 'on' : ''}" data-a="vestirPanda" data-f="${campo}" data-v="${valor}" aria-pressed="${on}">
+      <span class="peca-img">${PandaSVG({ [campo]: valor, efeitos: false })}</span>
+      <span class="peca-nome">${valor ? esc(nome) : 'Sem nada'}</span>
+    </button>`;
+  };
+  return `<div class="card seu-panda">
+    <div class="provador">
+      <div class="palco">
+        <span class="fita">Provador do panda 🎀</span>
+        ${Panda.html('previa')}
+        <p class="palco-leg">${usando ? `Usando ${usando} ${usando === 1 ? 'acessório' : 'acessórios'} ✨` : 'Ao natural, do jeitinho que veio 🐼'}</p>
+        <div class="acoes" style="justify-content:center">
+          <button class="btn pri" data-a="sortearPanda">🎲 Surpresa!</button>
+          ${usando ? '<button class="btn" data-a="limparPanda">Tirar tudo</button>' : ''}
+        </div>
+      </div>
+      <div class="guarda">
+        ${Object.entries(Panda.ACESSORIOS).map(([campo, ops]) => `
+          <h3><span>${GRUPOS[campo][0]}</span> ${GRUPOS[campo][1]}</h3>
+          <div class="pecas">${Object.entries(ops).map(([v, n]) => opcao(campo, v, n)).join('')}</div>`).join('')}
       </div>
     </div>
+    <p class="muted small dica">Ele reage ao que você faz, cochila quando você some e acorda quando você volta.
+      Cutuque para conversar (mas não exagere 😤). Cada aparelho tem o seu panda.</p>
+    <h3 class="humores-tit"><span>💭</span> Os humores dele</h3>
     <div class="humores">${Panda.HUMORES.map(h => `<figure>${panda(h)}<figcaption>${HUMOR[h]}</figcaption></figure>`).join('')}</div>
   </div>`;
 }
@@ -642,6 +659,8 @@ const acoes = {
     db = vazio();
     reagir('bravo', 'Apagou TUDO?! 😤');
   },
+  vestirPanda: (v, el) => { Panda.definir(el.dataset.f, v || ''); },
+  limparPanda: () => { Object.keys(Panda.ACESSORIOS).forEach(c => Panda.definir(c, '')); },
   sortearPanda: () => Panda.sortear(),
   fecharModal,
   entrar: () => { App.msgLogin = ''; return Promise.resolve(App.entrar?.()); },
