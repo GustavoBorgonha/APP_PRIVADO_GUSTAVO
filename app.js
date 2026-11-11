@@ -195,8 +195,8 @@ function render() {
   if (App.modo === 'carregando') { $('#app').innerHTML = `<div class="carregando">${panda()}Carregando seus dados…</div>`; return; }
   if (App.modo === 'login') { $('#app').innerHTML = vLogin(); return; }
   document.querySelectorAll('.nav button').forEach(b => b.classList.toggle('ativo', b.dataset.v === ui.aba));
-  const views = { inicio: vInicio, financas: vFinancas, planos: vPlanos, dados: vDados };
-  const tela = ui.aba + '|' + (ui.aba === 'planos' ? ui.plano || '' : ui.aba === 'financas' && ui.naTriagem ? 'triagem' : '');
+  const views = { inicio: vInicio, financas: vFinancas, extratos: vExtratos, planos: vPlanos, dados: vDados };
+  const tela = ui.aba + '|' + (ui.aba === 'planos' ? ui.plano || '' : ui.aba === 'extratos' && ui.naTriagem ? 'triagem' : ui.aba === 'extratos' ? ui.lote || '' : '');
   const trocou = tela !== render.tela; render.tela = tela;
   const app = $('#app');
   app.classList.remove('entrando');
@@ -291,8 +291,8 @@ function vInicio() {
       ${atalho('novoLanc', 'receita', IC.receita, 'Receita')}
       ${atalho('novoLanc', 'despesa', IC.despesa, 'Despesa')}
       ${atalho('novoPlano', '', IC.alvo, 'Novo plano')}
-      ${atalho('aba', 'financas', IC.extrato, 'Extrato')}
-      ${atalho('importarExtrato', '', IC.importar, 'Importar extrato')}
+      ${atalho('aba', 'financas', IC.extrato, 'Finanças')}
+      ${atalho('aba', 'extratos', IC.importar, 'Extratos')}
       ${atalho('exportarCSV', '', IC.baixar, 'Planilha')}
     </div>
 
@@ -316,7 +316,6 @@ function vInicio() {
 }
 
 function vFinancas() {
-  if (ui.triagem && ui.naTriagem) return vTriagem();
   const l = lancMes(ui.mes).sort((a, b) => b.data.localeCompare(a.data));
   const rec = soma(l.filter(x => x.tipo === 'receita'), x => x.valor);
   const des = soma(l.filter(x => x.tipo === 'despesa'), x => x.valor);
@@ -423,7 +422,7 @@ function vTriagem() {
   const feitos = total - pend.length;
   return `
     <div class="topo">
-      <div><button class="btn mini voltar" data-a="sairTriagem" title="A triagem fica salva para continuar depois">${IC.voltar} Finanças</button>
+      <div><button class="btn mini voltar" data-a="sairTriagem" title="A triagem fica salva para continuar depois">${IC.voltar} Extratos</button>
         <h1 style="margin-top:10px">Triagem do extrato</h1>
         <p class="sub" style="margin:0"><span class="selo">${esc(t.banco)} · ${t.meio === 'credito' ? 'cartão de crédito' : 'conta (débito)'}</span>
           ${esc(t.arquivo)} · nada entra nas suas finanças sem você confirmar.</p></div>
@@ -489,7 +488,7 @@ async function importarExtrato() {
     } catch (e) { console.error(e); }
     if (!itens.length) return alert('Não encontrei lançamentos neste arquivo. Use o extrato em OFX ou CSV baixado do seu banco.');
     ui.triagem = { arquivo: arq.nome, ...opc, itens, lote: uid(), em: hoje() };
-    ui.naTriagem = true; ui.aba = 'financas'; ui.plano = null;
+    ui.naTriagem = true; ui.aba = 'extratos'; ui.plano = null;
   });
 }
 const itemTriagem = id => ui.triagem?.itens.find(i => i.id === id);
@@ -573,20 +572,52 @@ function lotesImportados() {
   return [...m.values()].sort((a, b) => (b.em || '').localeCompare(a.em || ''));
 }
 
-function vImportacoes() {
+/* ---------- aba Extratos: importar, triagem em andamento e histórico ---------- */
+function vExtratos() {
+  if (ui.triagem && ui.naTriagem) return vTriagem();
   const lotes = lotesImportados();
-  if (!lotes.length) return '';
-  return `<div class="card"><h2>Extratos importados</h2>
-    <p class="muted small" style="margin-top:-6px">Cancelar uma importação apaga todos os lançamentos que vieram daquele arquivo, mesmo os já confirmados.</p>
-    <div class="movs">${lotes.map(g => {
+  const total = lotes.reduce((n, g) => n + g.itens.length, 0);
+  const meioRot = m => m === 'credito' ? 'Cartão de crédito' : 'Conta (débito)';
+  return `
+    <div class="topo">
+      <div><h1>Extratos</h1><p class="sub" style="margin:0">Importe o extrato do banco, revise na triagem e acompanhe o histórico.</p></div>
+      <button class="btn pri" data-a="importarExtrato">${IC.importar} Importar extrato</button>
+    </div>
+    ${ui.triagem ? avisoTriagem() : ''}
+    <div class="card como">
+      <div><span>1</span><b>Baixe</b> o extrato no app do banco em <b>OFX</b> ou <b>CSV</b>.</div>
+      <div><span>2</span><b>Importe</b> e diga de qual banco é e se é conta ou cartão.</div>
+      <div><span>3</span><b>Revise</b> cada lançamento na triagem: confirmar ou ignorar.</div>
+    </div>
+    <div class="topo secao"><h2>Histórico de extratos</h2>
+      ${lotes.length ? `<span class="muted small">${lotes.length} ${lotes.length === 1 ? 'extrato' : 'extratos'} · ${total} ${total === 1 ? 'lançamento' : 'lançamentos'}</span>` : ''}</div>
+    ${lotes.length ? lotes.map(g => {
       const datas = g.itens.map(l => l.data).sort();
-      return `<div class="mov tri-feito">
-        <span class="mov-ic">${g.meio === 'credito' ? '💳' : '🏦'}</span>
-        <span class="mov-txt"><strong>${esc(g.arquivo)}</strong>
-          <small>${esc(rotuloOrigem(g) || 'Extrato')} · ${g.itens.length} ${g.itens.length === 1 ? 'lançamento' : 'lançamentos'} · ${fmtData(datas[0])} a ${fmtData(datas[datas.length - 1])}${g.em ? ' · importado em ' + fmtData(g.em) : ''}</small></span>
-        <button class="btn mini perigo" data-a="desfazerLote" data-v="${g.id}">Cancelar importação</button></div>`;
-    }).join('')}</div>
-  </div>`;
+      const rec = soma(g.itens.filter(l => l.tipo === 'receita'), l => l.valor), des = soma(g.itens.filter(l => l.tipo === 'despesa'), l => l.valor);
+      const aberto = ui.lote === g.id;
+      return `<div class="card lote ${aberto ? 'aberto' : ''}">
+        <div class="lote-cab" data-a="abrirLote" data-v="${g.id}" role="button" tabindex="0" aria-expanded="${aberto}">
+          <span class="mov-ic">${g.meio === 'credito' ? '💳' : '🏦'}</span>
+          <span class="mov-txt"><strong>${esc(g.banco || 'Banco não informado')} · ${meioRot(g.meio)}</strong>
+            <small>${esc(g.arquivo)}</small>
+            <small>${fmtData(datas[0])} a ${fmtData(datas[datas.length - 1])}${g.em ? ' · importado em ' + fmtData(g.em) : ''}</small></span>
+          <span class="lote-num"><b>${g.itens.length}</b><small>${g.itens.length === 1 ? 'lançamento' : 'lançamentos'}</small></span>
+          <span class="lote-seta">${IC.seta}</span>
+        </div>
+        ${aberto ? `<div class="lote-corpo">
+          <div class="chips">
+            ${rec ? `<span class="chip"><i class="seta pos">${IC.receita}</i>Entradas <b>${din(rec)}</b></span>` : ''}
+            ${des ? `<span class="chip"><i class="seta neg">${IC.despesa}</i>Saídas <b>${din(des)}</b></span>` : ''}
+          </div>
+          <div class="movs">${g.itens.slice().sort((a, b) => b.data.localeCompare(a.data)).map(l => itemExtrato(l, { data: true })).join('')}</div>
+          <div class="acoes" style="justify-content:flex-end;margin-top:10px">
+            <button class="btn perigo" data-a="desfazerLote" data-v="${g.id}">Cancelar importação</button></div>
+        </div>` : ''}
+      </div>`;
+    }).join('')
+    : `<div class="card vazio">${panda('preguica')}Nenhum extrato importado ainda.<br>
+        <div class="acoes" style="justify-content:center;margin-top:14px"><button class="btn pri" data-a="importarExtrato">Importar o primeiro</button></div></div>`}
+    ${lotes.length ? '<p class="muted small">Cancelar uma importação apaga todos os lançamentos que vieram daquele extrato, mesmo os já confirmados. Extratos importados antes do histórico existir não aparecem aqui.</p>' : ''}`;
 }
 
 function vDados() {
@@ -598,8 +629,7 @@ function vDados() {
         <button class="btn" data-a="sair">Sair</button></div>`
       : `<p class="sub">Modo local: tudo fica salvo neste aparelho/navegador. Faça backups com frequência.</p>`}
     ${vSeuPanda()}
-    ${vImportacoes()}
-    <div class="card"><h2>Backup</h2>
+        <div class="card"><h2>Backup</h2>
       <p class="muted">Use o backup para guardar uma cópia ou passar seus dados do computador para o celular (e vice-versa).</p>
       <div class="acoes"><button class="btn pri" data-a="exportarJSON">Baixar backup</button><button class="btn" data-a="importarJSON">Restaurar backup</button></div>
     </div>
@@ -758,7 +788,7 @@ async function importarCSV() {
 
 /* ---------- ações ---------- */
 const acoes = {
-  aba: v => { ui.aba = v; ui.plano = null; },
+  aba: v => { ui.aba = v; ui.plano = null; ui.naTriagem = false; },   // trocar de aba pausa a triagem (fica salva)
   mes: v => { ui.mes = mesDesloc(ui.mes, +v); },
   novoLanc: v => modalLanc(null, v),
   filtro: v => { ui.filtro = v; },
@@ -832,7 +862,8 @@ const acoes = {
     ui.naTriagem = false;
     if (!t.itens.some(i => i.estado === 'pendente')) ui.triagem = null;
   },
-  retomarTriagem: () => { if (!ui.triagem) return; conferirTriagem(); ui.naTriagem = true; ui.aba = 'financas'; ui.plano = null; },
+  abrirLote: v => { ui.lote = ui.lote === v ? null : v; },
+  retomarTriagem: () => { if (!ui.triagem) return; conferirTriagem(); ui.naTriagem = true; ui.aba = 'extratos'; ui.plano = null; },
   descartarTriagem: () => {
     const t = ui.triagem; if (!t) return;
     const pend = t.itens.filter(i => i.estado === 'pendente').length;

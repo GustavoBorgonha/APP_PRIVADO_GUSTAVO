@@ -783,3 +783,28 @@ dialog[open]::backdrop { animation: fundo .25s ease-out; }
 .tri-pausada .mov-txt { flex: 1 1 200px; }
 .tri-pausada .mov-txt small { overflow-wrap: anywhere; }
 @media (max-width: 520px) { .tri-pausada .acoes { flex: 1 0 100%; } .tri-pausada .acoes .btn { flex: 1; } }
+
+/* ---------- Aba Extratos ---------- */
+.btn.pri svg { width: 17px; height: 17px; vertical-align: -3px; margin-right: 2px; }
+.como { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; padding: 16px 18px; font-size: 14px; color: var(--muted); }
+.como b { color: var(--text); font-weight: 600; }
+.como span {
+  display: inline-grid; place-items: center; width: 24px; height: 24px; margin-right: 8px; border-radius: 50%;
+  background: var(--acento-suave); color: var(--acento); font-weight: 700; font-size: 13px;
+}
+@media (max-width: 760px) { .como { grid-template-columns: 1fr; gap: 10px; } }
+.lote { padding: 0; overflow: hidden; margin-bottom: 12px; }
+.lote-cab { display: flex; align-items: center; gap: 12px; padding: 14px 18px; cursor: pointer; transition: background .15s; }
+.lote-cab:hover { background: var(--soft); }
+.lote-cab .mov-txt small { overflow-wrap: anywhere; }
+.lote-num { display: flex; flex-direction: column; align-items: flex-end; line-height: 1.15; }
+.lote-num b { font-size: 20px; font-weight: 600; }
+.lote-num small { color: var(--muted); font-size: 12px; }
+.lote-seta svg { width: 18px; height: 18px; color: var(--muted); transition: transform .25s var(--suave); display: block; }
+.lote.aberto .lote-seta svg { transform: rotate(90deg); }
+.lote-corpo { padding: 4px 18px 16px; border-top: 1px solid var(--line); animation: entrar .35s var(--suave); }
+.lote-corpo .chips { margin: 12px 0 6px; }
+@media (max-width: 760px) {
+  /* 5 abas na barra do celular: rótulos um pouco menores */
+  .nav button { font-size: 10.5px; }
+}

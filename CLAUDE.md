@@ -25,7 +25,7 @@ PWA em JavaScript puro (sem framework, sem build) para finanças pessoais e plan
   ✌️ (feliz) e golpe de kung fu (bravo). Acessórios ficam no localStorage (`apg-panda`), por aparelho,
   e são escolhidos no "Provador do panda" da aba Dados (`vSeuPanda`: cartões com mini pandas).
   `icons/panda.svg` e `icons/icon.svg` são gerados a partir do `PandaSVG`. Fonte Outfit em `fonts/`.
-- `app.js` — toda a lógica e as telas (Início, Finanças, Planos, Dados).
+- `app.js` — toda a lógica e as telas (Início, Finanças, Extratos, Planos, Dados).
   O estado fica em `db = { lancamentos, planos }`; toda mudança chama `salvar()` e `render()`.
 - `extrato.js` — lê extratos do banco (OFX e CSV com Crédito/Débito) e sugere descrição/categoria
   (`Extrato.preparar`). Nunca grava direto: os itens vão para `ui.triagem` e a tela `vTriagem` (em
@@ -34,9 +34,9 @@ PWA em JavaScript puro (sem framework, sem build) para finanças pessoais e plan
   Duplicados: mesmo `origem` fica fora da triagem (estado `duplicado`); mesma data+valor+tipo pede
   confirmação extra ao confirmar (`parecido`).
   Cada importação tem um `lote` (salvo no lançamento com `loteArquivo`/`loteEm`): "Cancelar importação"
-  na triagem ou na aba Dados (`vImportacoes`) apaga todos os lançamentos daquele lote.
+  na triagem ou no histórico da aba Extratos (`vExtratos`) apaga todos os lançamentos daquele lote.
   A triagem fica salva no aparelho (`apg-triagem`): "Voltar" pausa, e o aviso "Triagem em andamento"
-  (Início/Finanças) permite continuar ou descartar. É apagada ao sair da conta. Não versionar extratos reais; os testes usam
+  (Início/Finanças/Extratos) permite continuar ou descartar. É apagada ao sair da conta. Não versionar extratos reais; os testes usam
   extratos de mentira.
 - `nuvem.js` — login e sincronização. `App.sincronizar(db)` envia só o que mudou; os
   `onSnapshot` chamam `App.receber()`.

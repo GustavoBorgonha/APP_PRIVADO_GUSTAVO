@@ -111,6 +111,7 @@ async function importacaoExtrato(navegador, url, erros) {
   const salvos = () => p.evaluate(() => (JSON.parse(localStorage.getItem('apg-dados-v1')) || { lancamentos: [] }).lancamentos);
   // Escolhe o arquivo e responde "de onde é este extrato" (banco + conta/cartão).
   const importar = async (nome, conteudo, banco, meio = 'debito') => {
+    await p.click('.nav >> text=Extratos');
     const [fc] = await Promise.all([p.waitForEvent('filechooser'), p.click('[data-a=importarExtrato]')]);
     await fc.setFiles({ name: nome, mimeType: 'text/plain', buffer: Buffer.from(conteudo, 'latin1') });
     await p.waitForSelector('dialog [name=banco]');
@@ -186,10 +187,12 @@ async function importacaoExtrato(navegador, url, erros) {
   await cartao('COMPRA D').locator('[data-a=triConfirmar]').click();
   await cartao('COMPRA E').locator('[data-a=triConfirmar]').click();
   await p.click('text=Concluir');
-  await p.click('.nav >> text=Dados');
-  confere(await p.isVisible('text=depois.csv'), 'aba Dados lista os extratos importados');
-  await p.locator('.mov', { hasText: 'depois.csv' }).locator('[data-a=desfazerLote]').click();
-  confere((await salvos()).length === antes && !(await p.isVisible('text=depois.csv')), 'cancelar importação antiga apaga todos os lançamentos dela');
+  await p.click('.nav >> text=Extratos');
+  confere(await p.isVisible('text=depois.csv') && await p.isVisible('text=Histórico de extratos'), 'aba Extratos mostra o histórico');
+  await p.locator('.lote', { hasText: 'depois.csv' }).locator('.lote-cab').click();
+  confere(await p.locator('.lote.aberto .mov', { hasText: 'Compra d' }).count() === 1, 'abrir um extrato do histórico mostra os lançamentos dele');
+  await p.locator('.lote', { hasText: 'depois.csv' }).locator('[data-a=desfazerLote]').click();
+  confere((await salvos()).length === antes && !(await p.isVisible('text=depois.csv')), 'cancelar importação pelo histórico apaga todos os lançamentos dela');
   await p.click('.nav >> text=Finanças');
 
   await importar('extrato.csv', CSV_TESTE, 'Bradesco');
