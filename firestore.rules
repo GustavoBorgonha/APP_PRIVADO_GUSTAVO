@@ -13,6 +13,7 @@ service cloud.firestore {
 
     match /lancamentos/{id} { allow read, write: if autorizado(); }
     match /planos/{id}      { allow read, write: if autorizado(); }
+    match /triagens/{id}    { allow read, write: if autorizado(); }   // triagem de extrato em andamento
 
     // Ninguém altera a lista de acesso pelo app.
     match /acesso/{doc} { allow read, write: if false; }

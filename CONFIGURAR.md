@@ -46,3 +46,11 @@ No GitHub: **Settings → General → Danger Zone → Change repository visibili
   verificados que estejam na lista `acesso/permitidos`. Essa lista não pode ser alterada pelo app —
   só por você, no console do Firebase.
 - Os valores em `firebase-config.js` não são senha; servem apenas para o app saber qual projeto usar.
+
+## Atualizar as regras do Firebase (quando o app mudar)
+
+Sempre que o arquivo [`firestore.rules`](firestore.rules) mudar, cole a versão nova no Firebase:
+**Firestore Database → Regras** → apague tudo → cole o conteúdo do arquivo → **Publicar**.
+
+- Novembro/2026: entrou a regra `triagens`, que deixa a triagem de extrato continuar em qualquer
+  aparelho. Sem ela, a triagem funciona, mas fica salva só no aparelho onde começou.

@@ -7,7 +7,8 @@ PWA em JavaScript puro (sem framework, sem build) para finanças pessoais e plan
 
 - **Site:** https://appgustavo.netlify.app — o Netlify publica sozinho a cada commit na `main`.
 - **Login e dados:** Firebase (projeto `projetogustavoapp-88b20`): login Google + Cloud Firestore.
-  - Coleções: `lancamentos`, `planos` (dados compartilhados entre os usuários autorizados) e
+  - Coleções: `lancamentos`, `planos` (dados compartilhados entre os usuários autorizados),
+    `triagens` (triagem de extrato em andamento) e
     `acesso/permitidos` (campo `emails`: lista de quem pode entrar, editada só pelo console).
   - Regras em `firestore.rules`. Se mudarem, o Gustavo precisa colar no console do Firebase
     (aba Regras) — não há deploy automático das regras.
@@ -35,8 +36,10 @@ PWA em JavaScript puro (sem framework, sem build) para finanças pessoais e plan
   confirmação extra ao confirmar (`parecido`).
   Cada importação tem um `lote` (salvo no lançamento com `loteArquivo`/`loteEm`): "Cancelar importação"
   na triagem ou no histórico da aba Extratos (`vExtratos`) apaga todos os lançamentos daquele lote.
-  A triagem fica salva no aparelho (`apg-triagem`): "Voltar" pausa, e o aviso "Triagem em andamento"
-  (Início/Finanças/Extratos) permite continuar ou descartar. É apagada ao sair da conta. Não versionar extratos reais; os testes usam
+  A triagem fica salva para continuar de onde parou: com login, no Firestore (`triagens/atual`, uma
+  triagem por vez, compartilhada entre aparelhos — `App.salvarTriagem`/`App.receberTriagem`); sem login
+  ou se as regras recusarem, no aparelho (`apg-triagem`). "Voltar" pausa, e o aviso "Triagem em
+  andamento" (Início/Finanças/Extratos) permite continuar ou descartar. Não versionar extratos reais; os testes usam
   extratos de mentira.
 - `nuvem.js` — login e sincronização. `App.sincronizar(db)` envia só o que mudou; os
   `onSnapshot` chamam `App.receber()`.

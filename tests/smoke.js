@@ -27,14 +27,23 @@ const FIREBASE_FALSO = {
     export const signInWithPopup = async () => { user = { displayName: 'Maria Teste', email: window.__email }; cb(user); };
     export const signOut = async () => { user = null; cb(null); };`,
   'firebase-firestore.js': `
-    const store = { lancamentos: new Map(), planos: new Map() }, subs = { lancamentos: [], planos: [] }; window.__store = store;
+    // Banco em memória. window.__seed permite começar com dados de "outro aparelho".
+    const seed = window.__seed || {};
+    const store = { lancamentos: new Map(seed.lancamentos || []), planos: new Map(seed.planos || []), triagens: new Map(seed.triagens || []) };
+    const subs = { lancamentos: [], planos: [], triagens: [] }, docSubs = []; window.__store = store;
+    window.__exportar = () => JSON.stringify(Object.fromEntries(Object.entries(store).map(([c, m]) => [c, [...m]])));
     export const initializeFirestore = () => ({}); export const persistentLocalCache = () => ({}); export const persistentMultipleTabManager = () => ({});
     export const collection = (f, c) => c; export const doc = (f, c, id) => ({ c, id });
     const emit = c => subs[c].forEach(s => s({ docs: [...store[c]].map(([id, d]) => ({ id, data: () => structuredClone(d) })) }));
-    export const onSnapshot = (c, ok, err) => {
-      if (window.__email !== 'ok@gmail.com') { setTimeout(() => err({ code: 'permission-denied', message: 'negado' }), 0); return () => {}; }
-      subs[c].push(ok); setTimeout(() => emit(c), 0); return () => { subs[c] = subs[c].filter(s => s !== ok); };
+    const emitDocs = () => docSubs.forEach(([r, ok]) => ok({ exists: () => store[r.c].has(r.id), data: () => structuredClone(store[r.c].get(r.id)) }));
+    const negado = () => window.__email !== 'ok@gmail.com';
+    export const onSnapshot = (ref, ok, err) => {
+      if (negado() || (typeof ref !== 'string' && window.__semRegraTriagem)) { setTimeout(() => err({ code: 'permission-denied', message: 'negado' }), 0); return () => {}; }
+      if (typeof ref !== 'string') { const s = [ref, ok]; docSubs.push(s); setTimeout(emitDocs, 0); return () => docSubs.splice(docSubs.indexOf(s), 1); }
+      subs[ref].push(ok); setTimeout(() => emit(ref), 0); return () => { subs[ref] = subs[ref].filter(s => s !== ok); };
     };
+    export const setDoc = async (r, d) => { if (window.__semRegraTriagem) throw { code: 'permission-denied', message: 'negado' }; store[r.c].set(r.id, structuredClone(d)); setTimeout(emitDocs, 0); };
+    export const deleteDoc = async r => { if (window.__semRegraTriagem) throw { code: 'permission-denied', message: 'negado' }; store[r.c].delete(r.id); setTimeout(emitDocs, 0); };
     export const writeBatch = () => { const ops = []; return {
       set: (r, d) => ops.push(() => store[r.c].set(r.id, d)), delete: r => ops.push(() => store[r.c].delete(r.id)),
       commit: async () => { ops.forEach(o => o()); setTimeout(() => { emit('lancamentos'); emit('planos'); }, 0); } }; };`,
@@ -207,6 +216,63 @@ async function importacaoExtrato(navegador, url, erros) {
   await ctx.close();
 }
 
+// Triagem na nuvem: começa num "aparelho" e continua em outro, de onde parou.
+async function triagemEntreAparelhos(navegador, url, erros) {
+  console.log('Triagem continua em outro aparelho (nuvem simulada)');
+  const aparelho = async (init) => {
+    const ctx = await navegador.newContext();
+    await ctx.route('**/firebase-config.js', r => r.fulfill({ contentType: 'text/javascript', body: 'window.FIREBASE_CONFIG = { apiKey: "teste" };' }));
+    await ctx.route('https://www.gstatic.com/firebasejs/**', r => r.fulfill({
+      contentType: 'text/javascript', headers: { 'access-control-allow-origin': '*' }, body: FIREBASE_FALSO[r.request().url().split('/').pop()] }));
+    const p = await ctx.newPage();
+    p.on('pageerror', e => erros.push('aparelhos: ' + e.message));
+    p.on('dialog', d => d.accept());
+    await p.addInitScript(init);
+    await p.goto(url);
+    await p.click('text=Entrar com Google');
+    await p.waitForSelector('text=Olá, Maria');
+    return { ctx, p };
+  };
+  const cartao = (p, texto) => p.locator('.tri', { hasText: texto });
+
+  // Aparelho 1 (ex.: computador): importa, edita e confirma 1, deixa o resto pendente.
+  let { ctx, p } = await aparelho(() => { window.__email = 'ok@gmail.com'; });
+  await p.click('.nav >> text=Extratos');
+  const [fc] = await Promise.all([p.waitForEvent('filechooser'), p.click('[data-a=importarExtrato]')]);
+  await fc.setFiles({ name: 'extrato.ofx', mimeType: 'text/plain', buffer: Buffer.from(OFX_TESTE, 'latin1') });
+  await p.fill('dialog [name=banco]', 'Inter');
+  await p.click('dialog >> text=Continuar');
+  await p.waitForSelector('.tri');
+  await cartao(p, 'LANCHONETE').locator('[data-a=triConfirmar]').click();
+  await cartao(p, 'CONDOMINIO').locator('[data-f=desc]').fill('Condomínio de março');
+  await cartao(p, 'CONDOMINIO').locator('[data-f=desc]').blur();
+  await p.waitForFunction(() => window.__store.triagens.has('atual') && JSON.stringify(window.__store.triagens.get('atual')).includes('Condomínio de março'));
+  confere(true, 'triagem é salva na nuvem, com as edições');
+  const nuvem = await p.evaluate(() => window.__exportar());
+  confere(await p.evaluate(() => localStorage.getItem('apg-triagem')) === null, 'com login, a triagem não fica presa no aparelho');
+  await ctx.close();
+
+  // Aparelho 2 (ex.: celular): outro navegador, mesma conta.
+  ({ ctx, p } = await aparelho(`window.__email = 'ok@gmail.com'; window.__seed = JSON.parse(${JSON.stringify(nuvem)});`));
+  confere(await p.isVisible('text=Triagem em andamento'), 'outro aparelho mostra a triagem em andamento');
+  await p.click('[data-a=retomarTriagem]');
+  confere(await p.locator('.tri').count() === 2 && await cartao(p, 'CONDOMINIO').locator('[data-f=desc]').inputValue() === 'Condomínio de março',
+    'outro aparelho continua de onde parou (pendentes e edições)');
+  await cartao(p, 'CONDOMINIO').locator('[data-a=triConfirmar]').click();
+  await cartao(p, 'FULANA').locator('[data-a=triIgnorar]').click();
+  await p.waitForSelector('text=Tudo revisado!');
+  await p.click('text=Concluir');
+  await p.waitForFunction(() => !window.__store.triagens.has('atual'));
+  confere(await p.evaluate(() => window.__store.lancamentos.size) === 2, 'concluir no outro aparelho grava tudo e encerra a triagem na nuvem');
+  await ctx.close();
+
+  // Regras do Firebase ainda sem a triagem: continua funcionando no aparelho e avisa.
+  ({ ctx, p } = await aparelho(() => { window.__email = 'ok@gmail.com'; window.__semRegraTriagem = true; }));
+  await p.click('.nav >> text=Extratos');
+  confere(await p.isVisible('text=falta atualizar as regras do Firebase'), 'sem a regra nova, avisa que a triagem fica só no aparelho');
+  await ctx.close();
+}
+
 async function modoNuvem(navegador, url, erros) {
   console.log('Modo nuvem (Firebase simulado)');
   const ctx = await navegador.newContext();
@@ -258,6 +324,7 @@ async function modoNuvem(navegador, url, erros) {
     await modoLocal(navegador, url, erros);
     await importacaoExtrato(navegador, url, erros);
     await modoNuvem(navegador, url, erros);
+    await triagemEntreAparelhos(navegador, url, erros);
     if (erros.length) throw new Error('Erros de JavaScript na página:\n' + erros.join('\n'));
     console.log('\nTudo certo ✅');
   } catch (e) {

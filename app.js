@@ -127,14 +127,28 @@ let db = carregar();
 const ui = { aba: 'inicio', mes: mesAtual(), plano: null, filtro: 'todos', oculto: false };
 try { ui.oculto = localStorage.getItem('apg-oculto') === '1'; } catch (e) { /* sem armazenamento */ }
 
-/* Triagem em andamento: fica salva NESTE aparelho para poder continuar depois de fechar o app.
+/* Triagem em andamento: fica salva para continuar depois, de onde parou.
+   - Com login (nuvem): fica no Firestore (triagens/atual), então continua em qualquer aparelho ou no site.
+   - Sem login (modo local), ou se a nuvem recusar: fica neste aparelho (localStorage).
    ui.triagem = a triagem (aberta ou pausada); ui.naTriagem = se a tela dela está aberta. */
 const CHAVE_TRIAGEM = 'apg-triagem';
-try { ui.triagem = JSON.parse(localStorage.getItem(CHAVE_TRIAGEM)) || null; } catch (e) { ui.triagem = null; }
+let triagemLocal = null;
+try { triagemLocal = JSON.parse(localStorage.getItem(CHAVE_TRIAGEM)) || null; } catch (e) { /* sem armazenamento */ }
+ui.triagem = triagemLocal;
 ui.naTriagem = false;
+// JSON com chaves em ordem fixa, para saber se a triagem mudou de verdade.
+const jsonEstavel = v => JSON.stringify(v, (k, x) =>
+  x && typeof x === 'object' && !Array.isArray(x) ? Object.fromEntries(Object.keys(x).sort().map(c => [c, x[c]])) : x);
+let triagemGuardada = ui.triagem ? jsonEstavel(ui.triagem) : '';
+const triagemNaNuvem = () => App.modo === 'nuvem' && App.salvarTriagem && !App.triagemSemNuvem;
 function guardarTriagem() {
+  const json = ui.triagem ? jsonEstavel(ui.triagem) : '';
+  if (json === triagemGuardada) return;   // só grava quando muda (render chama isto toda hora)
+  triagemGuardada = json;
+  if (triagemNaNuvem()) { App.salvarTriagem(ui.triagem); return; }
+  if (App.modo !== 'local' && App.modo !== 'nuvem') return;
   try {
-    if (ui.triagem) localStorage.setItem(CHAVE_TRIAGEM, JSON.stringify(ui.triagem));
+    if (ui.triagem) localStorage.setItem(CHAVE_TRIAGEM, json);
     else localStorage.removeItem(CHAVE_TRIAGEM);
   } catch (e) { /* sem armazenamento */ }
 }
@@ -375,7 +389,7 @@ function vFinancas() {
 }
 
 /* ---------- triagem de extrato importado ----------
-   Os movimentos lidos do arquivo ficam em ui.triagem (salva no aparelho) e NÃO entram nas
+   Os movimentos lidos do arquivo ficam em ui.triagem (salva na nuvem ou no aparelho) e NÃO entram nas
    finanças sozinhos: cada um precisa de "Confirmar". "Ignorar" descarta. */
 function cartaoTriagem(i) {
   const campo = (f, extra) => `data-c="tri" data-i="${i.id}" data-f="${f}" ${extra || ''}`;
@@ -583,6 +597,8 @@ function vExtratos() {
       <div><h1>Extratos</h1><p class="sub" style="margin:0">Importe o extrato do banco, revise na triagem e acompanhe o histórico.</p></div>
       <button class="btn pri" data-a="importarExtrato">${IC.importar} Importar extrato</button>
     </div>
+    ${App.modo === 'nuvem' && App.triagemSemNuvem ? `<p class="tri-aviso forte" style="margin:0 0 16px">⚠️ A triagem está salva só neste aparelho:
+      ${App.triagemSemNuvem === 'regras' ? 'falta atualizar as regras do Firebase (veja o CONFIGURAR.md, passo 2).' : 'não foi possível falar com a nuvem.'}</p>` : ''}
     ${ui.triagem ? avisoTriagem() : ''}
     <div class="card como">
       <div><span>1</span><b>Baixe</b> o extrato no app do banco em <b>OFX</b> ou <b>CSV</b>.</div>
@@ -903,7 +919,12 @@ const acoes = {
   fecharModal,
   entrar: () => { App.msgLogin = ''; return Promise.resolve(App.entrar?.()); },
   // Ao sair da conta, a triagem salva neste aparelho é apagada (para a próxima pessoa não ver o extrato).
-  sair: () => { ui.triagem = null; guardarTriagem(); return Promise.resolve(App.sair?.()); },
+  // Sair da conta: a triagem continua na nuvem; só some deste aparelho (e da cópia local, se houver).
+  sair: () => {
+    ui.triagem = null; ui.naTriagem = false; triagemGuardada = '';
+    try { localStorage.removeItem(CHAVE_TRIAGEM); } catch (e) { /* sem armazenamento */ }
+    return Promise.resolve(App.sair?.());
+  },
 };
 
 document.addEventListener('click', e => {
@@ -968,7 +989,44 @@ document.addEventListener('submit', e => {
 /* ---------- integração com a nuvem (nuvem.js) ---------- */
 App.render = render;
 App.mostrarLogin = msg => { App.modo = 'login'; if (msg) App.msgLogin = msg; fecharModalSeAberto(); render(); };
-App.carregando = () => { App.modo = 'carregando'; db = vazio(); render(); };
+App.carregando = () => {
+  App.modo = 'carregando'; db = vazio();
+  ui.triagem = null; ui.naTriagem = false; triagemGuardada = ''; App.triagemRecebida = false;
+  render();
+};
+// Triagem vinda da nuvem (de qualquer aparelho).
+App.receberTriagem = t => {
+  const primeira = !App.triagemRecebida; App.triagemRecebida = true;
+  // Primeira vez: se a nuvem não tem triagem e este aparelho tinha uma, envia a deste aparelho.
+  if (primeira && !t && triagemLocal) {
+    ui.triagem = triagemLocal; triagemLocal = null;
+    try { localStorage.removeItem(CHAVE_TRIAGEM); } catch (e) { /* sem armazenamento */ }
+    if (App.modo === 'nuvem') guardarTriagem();
+    renderSeguro(); return;
+  }
+  const json = t && t.itens ? jsonEstavel(t) : '';
+  if (json === triagemGuardada) return;
+  triagemGuardada = json;
+  ui.triagem = json ? t : null;
+  if (!ui.triagem) ui.naTriagem = false;
+  if (App.modo === 'nuvem') renderSeguro();
+};
+// A nuvem recusou a triagem (regras do Firebase antigas): continua funcionando neste aparelho.
+App.semTriagemNaNuvem = e => {
+  console.error(e);
+  if (App.triagemSemNuvem) return;
+  App.triagemSemNuvem = e && e.code === 'permission-denied' ? 'regras' : 'erro';
+  if (!ui.triagem && triagemLocal) ui.triagem = triagemLocal;
+  triagemGuardada = '';
+  guardarTriagem();
+  renderSeguro();
+};
+// Não atrapalha quem está digitando: atualiza a tela quando sair do campo.
+function renderSeguro() {
+  const ativo = document.activeElement;
+  if (modal.open || (ativo && ativo.closest('main') && /INPUT|TEXTAREA|SELECT/.test(ativo.tagName))) App.renderPendente = true;
+  else render();
+}
 App.receber = (colecao, docs, pronto) => {
   db[colecao] = docs;
   if (!pronto) return;
@@ -981,10 +1039,7 @@ App.receber = (colecao, docs, pronto) => {
       db.lancamentos = local.lancamentos; db.planos = local.planos; salvar();
     }
   }
-  // Não atrapalha quem está digitando: atualiza a tela quando sair do campo.
-  const ativo = document.activeElement;
-  if (modal.open || (ativo && ativo.closest('main') && /INPUT|TEXTAREA|SELECT/.test(ativo.tagName))) App.renderPendente = true;
-  else render();
+  renderSeguro();
 };
 function fecharModalSeAberto() { if (modal.open) fecharModal(); }
 document.addEventListener('focusout', () => setTimeout(() => {

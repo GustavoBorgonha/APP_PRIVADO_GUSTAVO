@@ -49,6 +49,15 @@ async function iniciar() {
     }
   };
 
+  // Triagem de extrato em andamento: um documento só (triagens/atual), compartilhado entre os aparelhos.
+  const refTriagem = F.doc(fs, 'triagens', 'atual');
+  App.salvarTriagem = t => {
+    const op = t
+      ? F.setDoc(refTriagem, { dados: JSON.parse(JSON.stringify(t)), em: Date.now(), por: App.usuario?.email || '' })
+      : F.deleteDoc(refTriagem);
+    op.catch(e => App.semTriagemNaNuvem(e));
+  };
+
   A.onAuthStateChanged(auth, u => {
     escutas.forEach(parar => parar()); escutas = [];
     if (!u) { App.usuario = null; App.mostrarLogin(); return; }
@@ -56,6 +65,9 @@ async function iniciar() {
     App.carregando();
     const recebido = {};
     let negado = false;
+    App.triagemSemNuvem = null;
+    escutas.push(F.onSnapshot(refTriagem, snap => App.receberTriagem(snap.exists() ? snap.data().dados : null),
+      e => App.semTriagemNaNuvem(e)));
     COLECOES.forEach(c => escutas.push(F.onSnapshot(F.collection(fs, c), snap => {
       const docs = snap.docs.map(d => ({ ...d.data(), id: d.id }));
       enviado[c] = new Map(docs.map(x => [x.id, estavel(x)]));
