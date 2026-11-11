@@ -54,3 +54,5 @@ Sempre que o arquivo [`firestore.rules`](firestore.rules) mudar, cole a versão 
 
 - Novembro/2026: entrou a regra `triagens`, que deixa a triagem de extrato continuar em qualquer
   aparelho. Sem ela, a triagem funciona, mas fica salva só no aparelho onde começou.
+- Novembro/2026: entrou a regra `categorias`, para as categorias criadas valerem em todos os
+  aparelhos. Sem ela, as categorias ficam salvas só no aparelho onde foram criadas.

@@ -26,6 +26,12 @@ PWA em JavaScript puro (sem framework, sem build) para finanças pessoais e plan
   ✌️ (feliz) e golpe de kung fu (bravo). Acessórios ficam no localStorage (`apg-panda`), por aparelho,
   e são escolhidos no "Provador do panda" da aba Dados (`vSeuPanda`: cartões com mini pandas).
   `icons/panda.svg` e `icons/icon.svg` são gerados a partir do `PandaSVG`. Fonte Outfit em `fonts/`.
+- Categorias: `CATS_PADRAO` (as que vêm com o app) + `db.categorias` (novas e alterações; coleção
+  `categorias` no Firestore, em lote separado; sem a regra, ficam no aparelho em `apg-categorias`).
+  Tela `vCategorias` (aba interna `categorias`, aberta por Finanças/Dados) e janela `modalCategoria`:
+  nome, tipo (despesa/receita/ambos) e ícone (emoji da lista, emoji próprio ou imagem reduzida a 96px).
+  Use `listaCategorias()`, `nomesCats(tipo)`, `iconeCat(nome, tipo)` (devolve HTML) e `opcoesCats()`.
+  Renomear atualiza os lançamentos; excluir passa os lançamentos para "Outros".
 - Categoria "Transferência entre contas" (`TRANSF`): aparece no extrato, mas fica fora de receitas,
   despesas e saldo (`contaNoSaldo`). Na importação é sugerida quando o nome do usuário aparece no movimento.
 - `app.js` — toda a lógica e as telas (Início, Finanças, Extratos, Planos, Dados).

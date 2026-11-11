@@ -29,8 +29,8 @@ const FIREBASE_FALSO = {
   'firebase-firestore.js': `
     // Banco em memória. window.__seed permite começar com dados de "outro aparelho".
     const seed = window.__seed || {};
-    const store = { lancamentos: new Map(seed.lancamentos || []), planos: new Map(seed.planos || []), triagens: new Map(seed.triagens || []) };
-    const subs = { lancamentos: [], planos: [], triagens: [] }, docSubs = []; window.__store = store;
+    const store = { lancamentos: new Map(seed.lancamentos || []), planos: new Map(seed.planos || []), triagens: new Map(seed.triagens || []), categorias: new Map(seed.categorias || []) };
+    const subs = { lancamentos: [], planos: [], triagens: [], categorias: [] }, docSubs = []; window.__store = store;
     window.__exportar = () => JSON.stringify(Object.fromEntries(Object.entries(store).map(([c, m]) => [c, [...m]])));
     export const initializeFirestore = () => ({}); export const persistentLocalCache = () => ({}); export const persistentMultipleTabManager = () => ({});
     export const collection = (f, c) => c; export const doc = (f, c, id) => ({ c, id });
@@ -46,7 +46,7 @@ const FIREBASE_FALSO = {
     export const deleteDoc = async r => { if (window.__semRegraTriagem) throw { code: 'permission-denied', message: 'negado' }; store[r.c].delete(r.id); setTimeout(emitDocs, 0); };
     export const writeBatch = () => { const ops = []; return {
       set: (r, d) => ops.push(() => store[r.c].set(r.id, d)), delete: r => ops.push(() => store[r.c].delete(r.id)),
-      commit: async () => { ops.forEach(o => o()); setTimeout(() => { emit('lancamentos'); emit('planos'); }, 0); } }; };`,
+      commit: async () => { ops.forEach(o => o()); setTimeout(() => { emit('lancamentos'); emit('planos'); emit('categorias'); }, 0); } }; };`,
 };
 
 function confere(cond, msg) {
@@ -70,7 +70,7 @@ async function modoLocal(navegador, url, erros) {
   await p.click('dialog >> text=Salvar');
   confere(await p.isVisible('.hero .balao.on') && await p.isVisible('.hero .panda-svg.h-feliz'), 'panda fica feliz com a receita');
   await p.click('.atalho >> text=Despesa');
-  await p.fill('[name=valor]', '2500'); await p.fill('[name=desc]', 'Aluguel'); await p.fill('[name=categoria]', 'Moradia');
+  await p.fill('[name=valor]', '2500'); await p.fill('[name=desc]', 'Aluguel'); await p.selectOption('#lanc-cat', 'Moradia');
   await p.click('dialog >> text=Salvar');
   await p.click('.nav >> text=Início');
   const saldo = await p.textContent('.hero .saldo-val');
@@ -78,12 +78,42 @@ async function modoLocal(navegador, url, erros) {
 
   // Transferência entre contas aparece no extrato, mas não mexe no saldo.
   await p.click('.atalho >> text=Despesa');
-  await p.fill('[name=valor]', '1000'); await p.fill('[name=desc]', 'Pix para a outra conta'); await p.fill('[name=categoria]', 'Transferência entre contas');
+  await p.fill('[name=valor]', '1000'); await p.fill('[name=desc]', 'Pix para a outra conta'); await p.selectOption('#lanc-cat', 'Transferência entre contas');
   await p.click('dialog >> text=Salvar');
   await p.click('.nav >> text=Início');
   confere((await p.textContent('.hero .saldo-val')).replace(/\s/g, ' ').includes('5.500,00'), 'transferência entre contas não altera o saldo');
   await p.click('.nav >> text=Finanças');
   confere(await p.isVisible('.mov-val.transf') && (await p.textContent('.hero .chips')).includes('Entre contas'), 'transferência aparece no extrato, separada');
+  await p.click('.nav >> text=Início');
+
+  // Categorias: criar com emoji, usar, renomear (atualiza lançamentos), emoji próprio e excluir.
+  await p.click('.nav >> text=Finanças');
+  await p.click('text=🏷️ Categorias');
+  await p.click('[data-a=novaCat]');
+  await p.fill('dialog [name=nome]', 'Pets');
+  await p.click('dialog .emo[data-v="🐶"]');
+  confere((await p.textContent('#cat-prev')).includes('🐶'), 'categoria: escolher emoji mostra na prévia');
+  await p.click('dialog >> text=Salvar');
+  confere(await p.isVisible('.cat-card:has-text("Pets")'), 'categoria nova aparece na tela de categorias');
+  await p.click('.nav >> text=Finanças');
+  await p.click('text=+ Lançamento');
+  await p.fill('[name=valor]', '80'); await p.fill('[name=desc]', 'Ração'); await p.selectOption('#lanc-cat', 'Pets');
+  await p.click('dialog >> text=Salvar');
+  confere((await p.textContent('.mov:has-text("Ração") .mov-ic')).includes('🐶'), 'lançamento usa a categoria nova, com o ícone');
+  await p.click('.nav >> text=Finanças'); await p.click('text=🏷️ Categorias');
+  await p.click('.cat-card:has-text("Pets")');
+  await p.fill('dialog [name=nome]', 'Bichos');
+  await p.fill('dialog [name=emojiProprio]', '🦜');
+  confere((await p.textContent('#cat-prev')).includes('🦜'), 'categoria: emoji próprio digitado vira o ícone');
+  await p.click('dialog >> text=Salvar');
+  const dadosCat = await p.evaluate(() => JSON.parse(localStorage.getItem('apg-dados-v1')));
+  confere(dadosCat.lancamentos.find(l => l.desc === 'Ração').categoria === 'Bichos' && dadosCat.categorias.some(c => c.nome === 'Bichos' && c.emoji === '🦜'),
+    'renomear categoria atualiza os lançamentos e guarda o emoji próprio');
+  await p.click('.cat-card:has-text("Bichos")');
+  await p.click('dialog [data-a=excluirCat]');
+  const depoisCat = await p.evaluate(() => JSON.parse(localStorage.getItem('apg-dados-v1')));
+  confere(depoisCat.lancamentos.find(l => l.desc === 'Ração').categoria === 'Outros' && !(await p.isVisible('.cat-card:has-text("Bichos")')),
+    'excluir categoria passa os lançamentos para Outros');
   await p.click('.nav >> text=Início');
 
   await p.click('text=+ Novo plano');

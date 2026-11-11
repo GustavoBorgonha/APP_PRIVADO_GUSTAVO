@@ -816,3 +816,44 @@ dialog[open]::backdrop { animation: fundo .25s ease-out; }
   display: inline-block; margin-left: 4px; padding: 1px 9px; border-radius: 999px; vertical-align: 1px;
   background: var(--acento-suave); color: var(--acento); font-size: 12px; font-weight: 600;
 }
+
+/* ---------- Categorias ---------- */
+.cat-img { width: 100%; height: 100%; object-fit: cover; border-radius: inherit; display: block; }
+.mov-ic .cat-img { width: 30px; height: 30px; border-radius: 10px; }
+.cat span .cat-img, .cat .cat-img { display: inline-block; width: 18px; height: 18px; border-radius: 5px; vertical-align: -4px; }
+.cats-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(132px, 1fr)); gap: 10px; margin-bottom: 22px; }
+.cat-card {
+  display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 16px 10px 12px;
+  background: var(--card); border: 1px solid var(--line); border-radius: 22px; box-shadow: var(--shadow);
+  cursor: pointer; color: var(--text); text-align: center;
+  transition: transform .25s var(--mola), box-shadow .2s, border-color .2s;
+}
+.cat-card:hover { transform: translateY(-3px); box-shadow: var(--shadow-alta); border-color: var(--acento); }
+.cat-card:active { transform: scale(.95); }
+.cat-card small { color: var(--muted); font-size: 12px; }
+.cat-card.solta { border-style: dashed; box-shadow: none; }
+.cat-nome { font-weight: 600; font-size: 14px; line-height: 1.2; }
+.cat-ic {
+  display: grid; place-items: center; width: 52px; height: 52px; border-radius: 18px; font-size: 26px;
+  background: var(--aurora-suave), var(--soft); overflow: hidden;
+}
+.cat-ic.grande { width: 68px; height: 68px; font-size: 36px; border-radius: 22px; flex-shrink: 0; }
+.cat-previa { display: flex; align-items: center; gap: 14px; padding: 12px; border-radius: 20px; background: var(--soft); }
+.cat-previa b { display: block; font-size: 17px; }
+.escolhas.tres { grid-template-columns: repeat(3, 1fr); }
+.escolhas.tres .escolha > span { align-items: center; justify-content: center; padding: 10px 6px; }
+.escolha input:disabled + span { opacity: .55; }
+.emojis { display: grid; grid-template-columns: repeat(auto-fill, minmax(40px, 1fr)); gap: 6px; max-height: 188px; overflow-y: auto; padding: 2px; }
+.emo {
+  height: 40px; border: 2px solid transparent; border-radius: 12px; background: var(--soft);
+  font-size: 21px; cursor: pointer; transition: transform .2s var(--mola), background .15s;
+}
+.emo:hover { transform: scale(1.12); background: var(--card); }
+.emo.on { border-color: var(--acento); background: var(--acento-suave); }
+.emo-proprio { display: flex; gap: 10px; align-items: flex-end; margin-top: 12px; }
+.emo-proprio label { flex: 1; }
+.mini-link { padding: 4px 0 0; font-size: 12.5px; font-weight: 600; }
+@media (max-width: 520px) {
+  .cats-grid { grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); gap: 8px; }
+  .emo-proprio { flex-direction: column; align-items: stretch; }
+}

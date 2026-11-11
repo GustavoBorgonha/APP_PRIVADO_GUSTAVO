@@ -7,13 +7,36 @@
 
 const CHAVE = 'apg-dados-v1';
 
-const CATEGORIAS = {
-  despesa: ['Moradia', 'Alimentação', 'Mercado', 'Transporte', 'Saúde', 'Educação', 'Lazer', 'Contas', 'Compras', 'Assinaturas', 'Cuidados pessoais', 'Cartão de crédito', 'Tarifas bancárias', 'Investimentos', 'Transferência entre contas', 'Outros'],
-  receita: ['Salário', 'Renda extra', 'Rendimentos', 'Reembolso', 'Transferência entre contas', 'Outros'],
-};
 /* Transferência entre contas (salário indo de uma conta para outra, dinheiro entre as contas do casal):
    aparece no extrato, mas NÃO conta como receita nem despesa, para não somar o mesmo dinheiro duas vezes. */
 const TRANSF = 'Transferência entre contas';
+
+/* Categorias que já vêm com o app: [tipo, nome, ícone]. Na tela Categorias dá para mudar nome, tipo e
+   ícone delas, excluir e criar novas. Essas mudanças ficam em db.categorias (um item por categoria:
+   as que vêm com o app usam o id "padrao-<nome>"; as novas, um id próprio). */
+const CATS_PADRAO = [
+  ['despesa', 'Moradia', '🏠'], ['despesa', 'Alimentação', '🍽️'], ['despesa', 'Mercado', '🛒'], ['despesa', 'Transporte', '🚌'],
+  ['despesa', 'Saúde', '💊'], ['despesa', 'Educação', '📚'], ['despesa', 'Lazer', '🎉'], ['despesa', 'Contas', '🧾'],
+  ['despesa', 'Compras', '🛍️'], ['despesa', 'Assinaturas', '📺'], ['despesa', 'Cuidados pessoais', '💈'],
+  ['despesa', 'Cartão de crédito', '💳'], ['despesa', 'Tarifas bancárias', '🏦'], ['despesa', 'Investimentos', '📈'],
+  ['receita', 'Salário', '💼'], ['receita', 'Renda extra', '✨'], ['receita', 'Rendimentos', '📈'], ['receita', 'Reembolso', '↩️'],
+  ['ambos', TRANSF, '🔄'], ['ambos', 'Outros', '📦'],
+];
+const CATS_FIXAS = [TRANSF, 'Outros'];   // não podem ser renomeadas nem excluídas (o app depende delas)
+const semAcentoApp = s => String(s ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+const idPadrao = nome => 'padrao-' + semAcentoApp(nome).replace(/[^a-z0-9]+/g, '-');
+function listaCategorias() {
+  const extra = new Map((db.categorias || []).map(c => [c.id, c]));
+  const lista = CATS_PADRAO.map(([tipo, nome, emoji]) => {
+    const id = idPadrao(nome);
+    return { id, nome, tipo, emoji, padrao: true, ...(extra.get(id) || {}) };
+  });
+  (db.categorias || []).forEach(c => { if (!c.id.startsWith('padrao-')) lista.push(c); });
+  return lista.filter(c => !c.excluida);
+}
+const serveTipo = (c, tipo) => c.tipo === tipo || c.tipo === 'ambos';
+const nomesCats = tipo => listaCategorias().filter(c => serveTipo(c, tipo)).map(c => c.nome);
+const catPorNome = (nome, tipo) => { const l = listaCategorias(); return l.find(c => c.nome === nome && serveTipo(c, tipo)) || l.find(c => c.nome === nome); };
 const ehTransf = l => l.categoria === TRANSF;
 const contaNoSaldo = l => !ehTransf(l);
 
@@ -111,16 +134,21 @@ function lerArquivo(accept) {
 }
 
 /* ---------- dados ---------- */
-function vazio() { return { versao: 1, lancamentos: [], planos: [] }; }
+function vazio() { return { versao: 1, lancamentos: [], planos: [], categorias: [] }; }
 function carregar() {
   try {
     const d = JSON.parse(localStorage.getItem(CHAVE));
-    if (d && Array.isArray(d.lancamentos) && Array.isArray(d.planos)) return d;
+    if (d && Array.isArray(d.lancamentos) && Array.isArray(d.planos)) { if (!Array.isArray(d.categorias)) d.categorias = []; return d; }
   } catch (e) { /* sem dados */ }
   return vazio();
 }
 function salvar() {
-  if (App.modo === 'nuvem') { App.sincronizar?.(db); return; }
+  if (App.modo === 'nuvem') {
+    App.sincronizar?.(db);
+    // Se a nuvem ainda não aceita categorias (regras antigas), elas ficam salvas neste aparelho.
+    if (App.categoriasSemNuvem) try { localStorage.setItem('apg-categorias', JSON.stringify(db.categorias || [])); } catch (e) { /* sem armazenamento */ }
+    return;
+  }
   if (App.modo !== 'local') return;
   try { localStorage.setItem(CHAVE, JSON.stringify(db)); }
   catch (e) { alert('Não foi possível salvar os dados neste navegador. Faça um backup em "Dados".'); }
@@ -177,12 +205,6 @@ const IC = {
   seta: svg('<path d="M9 6l6 6-6 6"/>'),
   voltar: svg('<path d="M15 6l-6 6 6 6"/>'),
 };
-const ICONE_CAT = {
-  'Moradia': '🏠', 'Alimentação': '🍽️', 'Mercado': '🛒', 'Transporte': '🚌', 'Saúde': '💊', 'Educação': '📚',
-  'Lazer': '🎉', 'Contas': '🧾', 'Compras': '🛍️', 'Assinaturas': '📺', 'Investimentos': '📈', 'Outros': '📦',
-  'Transferência entre contas': '🔄', 'Cuidados pessoais': '💈', 'Cartão de crédito': '💳', 'Tarifas bancárias': '🏦',
-  'Salário': '💼', 'Renda extra': '✨', 'Rendimentos': '📈', 'Reembolso': '↩️',
-};
 const MEIOS = { debito: 'débito', credito: 'crédito' };
 const rotuloOrigem = x => {
   const conta = x.banco || x.meio ? [x.banco, MEIOS[x.meio]].filter(Boolean).join(' ') : '';
@@ -196,7 +218,12 @@ const titulares = () => {
   nomes.add('Conjunta');
   return [...nomes];
 };
-const iconeCat = (cat, tipo) => ICONE_CAT[cat] || (tipo === 'receita' ? '💵' : '🧾');
+// Ícone da categoria (emoji ou imagem própria), já pronto para colocar no HTML.
+function iconeCat(cat, tipo) {
+  const c = catPorNome(cat, tipo);
+  if (c && c.img) return `<img class="cat-img" src="${esc(c.img)}" alt="">`;
+  return esc((c && c.emoji) || (tipo === 'receita' ? '💵' : '🧾'));
+}
 const DIAS = ['domingo', 'segunda', 'terça', 'quarta', 'quinta', 'sexta', 'sábado'];
 function rotuloDia(d) {
   if (d === hoje()) return 'Hoje';
@@ -224,8 +251,9 @@ function render() {
   document.body.dataset.aba = ui.aba;
   if (App.modo === 'carregando') { $('#app').innerHTML = `<div class="carregando">${panda()}Carregando seus dados…</div>`; return; }
   if (App.modo === 'login') { $('#app').innerHTML = vLogin(); return; }
-  document.querySelectorAll('.nav button').forEach(b => b.classList.toggle('ativo', b.dataset.v === ui.aba));
-  const views = { inicio: vInicio, financas: vFinancas, extratos: vExtratos, planos: vPlanos, dados: vDados };
+  const abaMenu = ui.aba === 'categorias' ? 'financas' : ui.aba;
+  document.querySelectorAll('.nav button').forEach(b => b.classList.toggle('ativo', b.dataset.v === abaMenu));
+  const views = { inicio: vInicio, financas: vFinancas, extratos: vExtratos, planos: vPlanos, dados: vDados, categorias: vCategorias };
   const tela = ui.aba + '|' + (ui.aba === 'planos' ? ui.plano || '' : ui.aba === 'extratos' && ui.naTriagem ? 'triagem' : ui.aba === 'extratos' ? ui.lote || '' : '');
   const trocou = tela !== render.tela; render.tela = tela;
   const app = $('#app');
@@ -387,6 +415,7 @@ function vFinancas() {
       <button class="btn" data-a="exportarCSV">Exportar planilha</button>
       <button class="btn" data-a="importarExtrato">Importar extrato do banco</button>
       <button class="btn" data-a="importarCSV">Importar planilha</button>
+      <button class="btn" data-a="aba" data-v="categorias">🏷️ Categorias</button>
     </div>
     <div class="cols-2" style="grid-template-columns:1.7fr 1fr">
       <div class="card">
@@ -423,7 +452,7 @@ function cartaoTriagem(i) {
     ${i.avisos.map(a => `<p class="tri-aviso">⚠️ ${esc(a)}</p>`).join('')}
     <div class="tri-campos">
       <label class="larga">Descrição<input ${campo('desc')} value="${esc(i.desc)}"></label>
-      <label>Categoria<input ${campo('categoria', `list="cats-${i.tipo}"`)} value="${esc(i.categoria)}"></label>
+      <label>Categoria<select ${campo('categoria')}>${opcoesCats(i.tipo, i.categoria)}</select></label>
       <label>Tipo<select ${campo('tipo')}>
         <option value="despesa" ${i.tipo === 'despesa' ? 'selected' : ''}>Despesa</option>
         <option value="receita" ${i.tipo === 'receita' ? 'selected' : ''}>Receita</option></select></label>
@@ -466,7 +495,6 @@ function vTriagem() {
         <span class="muted">${ok.length} ${ok.length === 1 ? 'confirmado' : 'confirmados'} · ${ign.length} ${ign.length === 1 ? 'ignorado' : 'ignorados'}${dup.length ? ` · ${dup.length} já ${dup.length === 1 ? 'importado' : 'importados'}` : ''}</span></div>
       <div class="barra"><i style="width:${total ? feitos / total * 100 : 0}%"></i></div>
     </div>
-    ${['despesa', 'receita'].map(tp => `<datalist id="cats-${tp}">${CATEGORIAS[tp].map(c => `<option value="${c}">`).join('')}</datalist>`).join('')}
     ${pend.length ? `<div class="tri-lista">${pend.map(cartaoTriagem).join('')}</div>`
       : `<div class="card vazio">${panda('feliz')}<strong style="color:var(--text);font-size:17px">Tudo revisado!</strong><br>
           ${ok.length} ${ok.length === 1 ? 'lançamento confirmado' : 'lançamentos confirmados'} e ${ign.length} ${ign.length === 1 ? 'ignorado' : 'ignorados'}.
@@ -524,7 +552,7 @@ async function importarExtrato() {
     let itens = [];
     try {
       itens = Extrato.preparar(Extrato.lerArquivo(arq.nome, arq.texto, opc), { ...opc, lancamentos: db.lancamentos, meuNome: App.usuario?.nome,
-        categorias: [...CATEGORIAS.despesa, ...CATEGORIAS.receita] });
+        categorias: listaCategorias().map(c => c.nome) });
     } catch (e) { console.error(e); }
     if (!itens.length) return alert('Não encontrei lançamentos neste arquivo. Use o extrato em OFX ou CSV baixado do seu banco.');
     ui.triagem = { arquivo: arq.nome, ...opc, itens, lote: uid(), em: hoje() };
@@ -671,6 +699,9 @@ function vDados() {
         <button class="btn" data-a="sair">Sair</button></div>`
       : `<p class="sub">Modo local: tudo fica salvo neste aparelho/navegador. Faça backups com frequência.</p>`}
     ${vSeuPanda()}
+        <div class="card"><h2>Categorias</h2>
+      <p class="muted">Crie categorias e escolha um emoji ou uma imagem para cada uma.</p>
+      <button class="btn" data-a="aba" data-v="categorias">🏷️ Gerenciar categorias</button></div>
         <div class="card"><h2>Backup</h2>
       <p class="muted">Use o backup para guardar uma cópia ou passar seus dados do computador para o celular (e vice-versa).</p>
       <div class="acoes"><button class="btn pri" data-a="exportarJSON">Baixar backup</button><button class="btn" data-a="importarJSON">Restaurar backup</button></div>
@@ -732,6 +763,134 @@ function abrirModal(html, aoSalvar) {
 function fecharModal() { modal.close(); aoSalvarModal = null; }
 modal.addEventListener('click', e => { if (e.target === modal) fecharModal(); });
 
+/* ---------- categorias: seleção, tela e cadastro ---------- */
+// <option>s de categoria para um tipo; mantém a atual mesmo que não esteja cadastrada.
+function opcoesCats(tipo, atual) {
+  const nomes = nomesCats(tipo);
+  if (atual && !nomes.includes(atual)) nomes.unshift(atual);
+  if (!atual) atual = 'Outros';
+  return nomes.map(n => { const c = catPorNome(n, tipo); return `<option value="${esc(n)}" ${n === atual ? 'selected' : ''}>${c && c.emoji && !c.img ? c.emoji + ' ' : ''}${esc(n)}</option>`; }).join('');
+}
+
+function vCategorias() {
+  const lista = listaCategorias();
+  const uso = {};
+  db.lancamentos.forEach(l => { uso[l.categoria] = (uso[l.categoria] || 0) + 1; });
+  const cartao = c => `<button class="cat-card" data-a="editarCat" data-v="${esc(c.id)}">
+      <span class="cat-ic">${c.img ? `<img class="cat-img" src="${esc(c.img)}" alt="">` : esc(c.emoji || '🏷️')}</span>
+      <span class="cat-nome">${esc(c.nome)}</span>
+      <small>${uso[c.nome] ? `${uso[c.nome]} ${uso[c.nome] === 1 ? 'lançamento' : 'lançamentos'}` : 'sem lançamentos'}</small>
+    </button>`;
+  const soltas = Object.keys(uso).filter(n => n && !lista.some(c => c.nome === n));
+  const grupo = (titulo, itens) => itens.length ? `<div class="topo secao"><h2>${titulo}</h2></div><div class="cats-grid">${itens.map(cartao).join('')}</div>` : '';
+  return `
+    <div class="topo">
+      <div><button class="btn mini voltar" data-a="aba" data-v="financas">${IC.voltar} Finanças</button>
+        <h1 style="margin-top:10px">Categorias</h1>
+        <p class="sub" style="margin:0">Toque numa categoria para mudar o nome, o tipo ou o ícone.</p></div>
+      <button class="btn pri" data-a="novaCat">+ Nova categoria</button>
+    </div>
+    ${App.modo === 'nuvem' && App.categoriasSemNuvem ? `<p class="tri-aviso forte" style="margin:0 0 16px">⚠️ As categorias estão salvas só neste aparelho:
+      ${App.categoriasSemNuvem === 'regras' ? 'falta atualizar as regras do Firebase (veja o CONFIGURAR.md).' : 'não foi possível falar com a nuvem.'}</p>` : ''}
+    ${grupo('Despesas', lista.filter(c => c.tipo === 'despesa'))}
+    ${grupo('Receitas', lista.filter(c => c.tipo === 'receita'))}
+    ${grupo('Servem para os dois', lista.filter(c => c.tipo === 'ambos'))}
+    ${soltas.length ? `<div class="topo secao"><h2>Usadas nos lançamentos, mas sem cadastro</h2></div>
+      <p class="muted small" style="margin-top:-6px">Cadastre para escolher um ícone e ela aparecer na lista.</p>
+      <div class="cats-grid">${soltas.map(n => `<button class="cat-card solta" data-a="cadastrarCat" data-v="${esc(n)}">
+        <span class="cat-ic">🏷️</span><span class="cat-nome">${esc(n)}</span><small>${uso[n]} ${uso[n] === 1 ? 'lançamento' : 'lançamentos'} · cadastrar</small></button>`).join('')}</div>` : ''}`;
+}
+
+const EMOJIS = ['🏠', '🍽️', '🛒', '🍕', '🍔', '☕', '🍺', '🍿', '🚌', '🚗', '⛽', '🅿️', '✈️', '🏖️', '🏨', '🎫',
+  '💊', '🏥', '🦷', '💈', '💅', '👕', '👟', '🛍️', '🎁', '💍', '👶', '🐶', '🐱', '📚', '🎓', '💻', '📱', '📺', '🎮',
+  '🎵', '🎬', '🎉', '⚽', '🏋️', '🧾', '💡', '💧', '🔥', '🌐', '🔧', '🧹', '🌱', '🏦', '💳', '💼', '💰', '💵', '📈',
+  '✨', '↩️', '🔄', '📦', '❤️', '⭐', '🐼', '🏷️'];
+const primeiroEmoji = v => {
+  v = String(v || '').trim(); if (!v) return '';
+  try { return [...new Intl.Segmenter('pt', { granularity: 'grapheme' }).segment(v)][0].segment; } catch (e) { return Array.from(v)[0]; }
+};
+
+function modalCategoria(c, nomeInicial) {
+  const nova = !c;
+  c = c || { nome: nomeInicial || '', tipo: 'despesa', emoji: '🏷️', img: '' };
+  const fixa = !nova && CATS_FIXAS.includes(c.nome);
+  const tipoOp = (v, rot) => `<label class="escolha"><input type="radio" name="tipo" value="${v}" ${c.tipo === v ? 'checked' : ''} ${fixa ? 'disabled' : ''}><span><b>${rot}</b></span></label>`;
+  abrirModal(`
+    <h2>${nova ? 'Nova categoria' : 'Editar categoria'}</h2>
+    <form class="form" data-f="modal">
+      <div class="full cat-previa"><span class="cat-ic grande" id="cat-prev">${c.img ? `<img class="cat-img" src="${esc(c.img)}" alt="">` : esc(c.emoji || '🏷️')}</span>
+        <div><b id="cat-prev-nome">${esc(c.nome) || 'Nome da categoria'}</b><small class="muted">Assim ela aparece no extrato</small></div></div>
+      <label class="full">Nome<input name="nome" required maxlength="40" value="${esc(c.nome)}" ${fixa ? 'readonly' : ''} placeholder="Ex.: Pets, Farmácia, Presentes" autocomplete="off"></label>
+      ${fixa ? `<p class="muted small full" style="margin:-6px 0 0">Esta categoria é usada pelo app: dá para trocar só o ícone.</p><input type="hidden" name="tipo" value="${c.tipo}">` : ''}
+      <div class="full"><span class="rotulo">Serve para</span>
+        <div class="escolhas tres">${tipoOp('despesa', '↓ Despesa')}${tipoOp('receita', '↑ Receita')}${tipoOp('ambos', '↕ As duas')}</div></div>
+      <div class="full"><span class="rotulo">Ícone</span>
+        <div class="emojis">${EMOJIS.map(e => `<button type="button" class="emo ${!c.img && e === c.emoji ? 'on' : ''}" data-a="escolherEmoji" data-v="${e}">${e}</button>`).join('')}</div>
+        <div class="emo-proprio">
+          <label>Ou use o seu emoji<input name="emojiProprio" maxlength="16" placeholder="Toque e escolha no teclado 😀" autocomplete="off"></label>
+          <button type="button" class="btn" data-a="imagemCat">🖼️ Usar uma imagem</button>
+        </div></div>
+      <input type="hidden" name="emoji" value="${esc(c.emoji || '🏷️')}"><input type="hidden" name="img" value="${esc(c.img || '')}">
+      <div class="modal-acoes full">
+        ${!nova && !fixa ? `<button type="button" class="btn perigo" data-a="excluirCat" data-v="${esc(c.id)}" style="margin-right:auto">Excluir</button>` : ''}
+        <button type="button" class="btn" data-a="fecharModal">Cancelar</button><button class="btn pri">Salvar</button></div>
+    </form>`, d => salvarCategoria(c, nova, d));
+}
+
+// Atualiza a prévia do ícone na janela de categoria.
+function previaCat() {
+  const f = $('#modal-body form'); if (!f) return;
+  $('#cat-prev').innerHTML = f.img.value ? `<img class="cat-img" src="${esc(f.img.value)}" alt="">` : esc(f.emoji.value || '🏷️');
+  $('#cat-prev-nome').textContent = f.nome.value.trim() || 'Nome da categoria';
+  f.querySelectorAll('.emo').forEach(b => b.classList.toggle('on', !f.img.value && b.dataset.v === f.emoji.value));
+}
+
+function salvarCategoria(c, nova, d) {
+  const nome = d.nome.trim().replace(/\s+/g, ' ');
+  const tipo = ['despesa', 'receita', 'ambos'].includes(d.tipo) ? d.tipo : c.tipo || 'despesa';
+  if (!nome) { alert('Dê um nome para a categoria.'); return false; }
+  const conflito = listaCategorias().find(x => x.id !== c.id && semAcentoApp(x.nome) === semAcentoApp(nome) &&
+    (x.tipo === 'ambos' || tipo === 'ambos' || x.tipo === tipo));
+  if (conflito) { alert(`Já existe a categoria "${conflito.nome}".`); return false; }
+  const dados = { nome, tipo, emoji: d.emoji || '🏷️', img: d.img || '' };
+  if (!nova && c.nome !== nome) {
+    // Renomear: os lançamentos (e a triagem) que usavam o nome antigo passam a usar o novo.
+    const muda = l => l.categoria === c.nome && (tipo === 'ambos' || l.tipo === tipo);
+    db.lancamentos.filter(muda).forEach(l => { l.categoria = nome; });
+    ui.triagem?.itens.filter(muda).forEach(i => { i.categoria = nome; });
+  }
+  db.categorias = db.categorias || [];
+  const id = nova ? 'cat-' + uid() : c.id;
+  const i = db.categorias.findIndex(x => x.id === id);
+  const reg = { id, ...dados };
+  if (i >= 0) db.categorias[i] = reg; else db.categorias.push(reg);
+  salvar(); render();
+  reagir('feliz', nova ? 'Categoria nova! 🏷️' : 'Categoria atualizada! ✨');
+}
+
+// Lê uma imagem escolhida pelo usuário e reduz para um ícone quadrado pequeno (cabe no banco de dados).
+function imagemParaIcone() {
+  return new Promise(res => {
+    const inp = Object.assign(document.createElement('input'), { type: 'file', accept: 'image/*' });
+    inp.onchange = () => {
+      const f = inp.files[0]; if (!f) return res('');
+      const url = URL.createObjectURL(f), img = new Image();
+      img.onload = () => {
+        const t = 96, cv = Object.assign(document.createElement('canvas'), { width: t, height: t }), ctx = cv.getContext('2d');
+        const lado = Math.min(img.width, img.height);
+        ctx.drawImage(img, (img.width - lado) / 2, (img.height - lado) / 2, lado, lado, 0, 0, t, t);
+        URL.revokeObjectURL(url);
+        let dado = cv.toDataURL('image/webp', .85);
+        if (!dado.startsWith('data:image/webp')) dado = cv.toDataURL('image/png');
+        res(dado);
+      };
+      img.onerror = () => { URL.revokeObjectURL(url); alert('Não consegui abrir esta imagem.'); res(''); };
+      img.src = url;
+    };
+    inp.click();
+  });
+}
+
 function modalLanc(l, tipoInicial) {
   const novo = !l;
   l = l || { tipo: tipoInicial === 'receita' ? 'receita' : 'despesa', desc: '', categoria: '', valor: '', data: ui.aba === 'financas' && ui.mes !== mesAtual() ? ui.mes + '-01' : hoje(), fixo: false };
@@ -743,10 +902,10 @@ function modalLanc(l, tipoInicial) {
         <option value="receita" ${l.tipo === 'receita' ? 'selected' : ''}>Receita</option></select></label>
       <label>Valor (R$)<input name="valor" type="number" step="0.01" min="0" required value="${l.valor}"></label>
       <label class="full">Descrição<input name="desc" required value="${esc(l.desc)}" placeholder="Ex.: Aluguel, mercado, salário"></label>
-      <label>Categoria<input name="categoria" list="cats" value="${esc(l.categoria)}" placeholder="Escolha ou digite"></label>
+      <label>Categoria<select name="categoria" id="lanc-cat"></select>
+        <button type="button" class="link mini-link" data-a="irCategorias">Criar ou editar categorias</button></label>
       <label>Data<input name="data" type="date" required value="${l.data}"></label>
       <label class="full" style="display:flex;gap:8px;align-items:center"><input type="checkbox" name="fixo" ${l.fixo ? 'checked' : ''} style="margin:0"> Lançamento fixo (repete todo mês)</label>
-      <datalist id="cats"></datalist>
       <div class="modal-acoes full"><button type="button" class="btn" data-a="fecharModal">Cancelar</button><button class="btn pri">Salvar</button></div>
     </form>`, d => {
     const dados = { tipo: d.tipo, desc: d.desc.trim(), categoria: d.categoria.trim() || 'Outros', valor: parseValor(d.valor), data: d.data, fixo: !!d.fixo };
@@ -756,7 +915,7 @@ function modalLanc(l, tipoInicial) {
     else if (novo && dados.valor >= 1000) reagir('bravo', 'Eita! Que gastão! 😤', 'Mil reais?! Hmpf! 😤');
     else if (novo) reagir('triste', 'Lá se vai o dinheirinho… 😢', 'Mais uma despesa… 🥲');
   });
-  const preencherCats = () => { $('#cats').innerHTML = CATEGORIAS[$('#lanc-tipo').value].map(c => `<option value="${c}">`).join(''); };
+  const preencherCats = () => { const atual = $('#lanc-cat').value || l.categoria; $('#lanc-cat').innerHTML = opcoesCats($('#lanc-tipo').value, atual); };
   $('#lanc-tipo').onchange = preencherCats; preencherCats();
 }
 
@@ -904,6 +1063,23 @@ const acoes = {
     ui.naTriagem = false;
     if (!t.itens.some(i => i.estado === 'pendente')) ui.triagem = null;
   },
+  novaCat: () => modalCategoria(),
+  cadastrarCat: v => modalCategoria(null, v),
+  editarCat: v => { const c = listaCategorias().find(x => x.id === v); if (c) modalCategoria(c); },
+  irCategorias: () => { fecharModal(); ui.aba = 'categorias'; ui.plano = null; ui.naTriagem = false; },
+  escolherEmoji: v => { const f = $('#modal-body form'); if (!f) return; f.emoji.value = v; f.img.value = ''; f.emojiProprio.value = ''; previaCat(); },
+  imagemCat: () => imagemParaIcone().then(dado => { const f = $('#modal-body form'); if (dado && f) { f.img.value = dado; previaCat(); } }),
+  excluirCat: v => {
+    const c = listaCategorias().find(x => x.id === v); if (!c || CATS_FIXAS.includes(c.nome)) return;
+    const usados = db.lancamentos.filter(l => l.categoria === c.nome && serveTipo(c, l.tipo));
+    if (!confirm(`Excluir a categoria "${c.nome}"?${usados.length ? `
+
+${usados.length === 1 ? 'O lançamento que usa' : `Os ${usados.length} lançamentos que usam`} esta categoria ${usados.length === 1 ? 'passa' : 'passam'} para "Outros".` : ''}`)) return;
+    usados.forEach(l => { l.categoria = 'Outros'; });
+    db.categorias = (db.categorias || []).filter(x => x.id !== v);
+    if (c.padrao) db.categorias.push({ id: v, excluida: true });
+    fecharModal();
+  },
   abrirLote: v => { ui.lote = ui.lote === v ? null : v; },
   retomarTriagem: () => { if (!ui.triagem) return; conferirTriagem(); ui.naTriagem = true; ui.aba = 'extratos'; ui.plano = null; },
   descartarTriagem: () => {
@@ -963,6 +1139,12 @@ document.addEventListener('click', e => {
 });
 
 // Teclado: Enter/Espaço ativam as linhas clicáveis do extrato.
+document.addEventListener('input', e => {
+  const t = e.target;
+  if (t.name === 'emojiProprio' && t.form) { const em = primeiroEmoji(t.value); if (em) { t.form.emoji.value = em; t.form.img.value = ''; } previaCat(); }
+  else if (t.name === 'nome' && t.form && t.form.emojiProprio) previaCat();
+});
+
 document.addEventListener('keydown', e => {
   if ((e.key === 'Enter' || e.key === ' ') && e.target.matches('[role=button][data-a]')) { e.preventDefault(); e.target.click(); }
 });
@@ -995,7 +1177,7 @@ document.addEventListener('submit', e => {
   const f = e.target, tipo = f.dataset.f; if (!tipo) return;
   e.preventDefault();
   const d = Object.fromEntries(new FormData(f));
-  if (tipo === 'modal') { aoSalvarModal?.(d); fecharModal(); }
+  if (tipo === 'modal') { if (aoSalvarModal?.(d) !== false) fecharModal(); else return; }
   else {
     const p = plano(f.dataset.p);
     if (tipo === 'addItem') p.itens.push({ id: uid(), desc: d.desc.trim(), previsto: parseValor(d.previsto), pago: 0 });
@@ -1021,6 +1203,15 @@ App.carregando = () => {
   render();
 };
 // Triagem vinda da nuvem (de qualquer aparelho).
+// Categorias vindas da nuvem.
+App.receberCategorias = docs => { db.categorias = docs; if (App.modo === 'nuvem') renderSeguro(); };
+App.semCategoriasNaNuvem = e => {
+  console.error(e);
+  if (App.categoriasSemNuvem) return;
+  App.categoriasSemNuvem = e && e.code === 'permission-denied' ? 'regras' : 'erro';
+  try { db.categorias = JSON.parse(localStorage.getItem('apg-categorias')) || db.categorias || []; } catch (x) { /* sem armazenamento */ }
+  renderSeguro();
+};
 App.receberTriagem = t => {
   const primeira = !App.triagemRecebida; App.triagemRecebida = true;
   // Primeira vez: se a nuvem não tem triagem e este aparelho tinha uma, envia a deste aparelho.
@@ -1062,7 +1253,9 @@ App.receber = (colecao, docs, pronto) => {
     const local = carregar();
     if (!db.lancamentos.length && !db.planos.length && (local.lancamentos.length || local.planos.length) &&
         confirm('Encontramos dados salvos neste aparelho. Enviar para a nuvem?')) {
-      db.lancamentos = local.lancamentos; db.planos = local.planos; salvar();
+      db.lancamentos = local.lancamentos; db.planos = local.planos;
+      if (!(db.categorias || []).length) db.categorias = local.categorias || [];
+      salvar();
     }
   }
   renderSeguro();

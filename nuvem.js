@@ -25,7 +25,7 @@ async function iniciar() {
   // Cache local: o app continua funcionando sem internet e sincroniza depois.
   const fs = F.initializeFirestore(app, { localCache: F.persistentLocalCache({ tabManager: F.persistentMultipleTabManager() }) });
 
-  const enviado = { lancamentos: new Map(), planos: new Map() }; // id -> JSON já sincronizado
+  const enviado = { lancamentos: new Map(), planos: new Map(), categorias: new Map() }; // id -> JSON já sincronizado
   let escutas = [];
 
   App.entrar = () => A.signInWithPopup(auth, new A.GoogleAuthProvider()).catch(e => {
@@ -34,9 +34,15 @@ async function iniciar() {
   App.sair = () => A.signOut(auth);
 
   // Envia só o que mudou desde a última sincronização.
+  // As categorias vão num lote separado: se as regras ainda não aceitarem, os lançamentos não são afetados.
   App.sincronizar = db => {
+    gravar(COLECOES, db, e => { console.error(e); alert('Não foi possível salvar na nuvem: ' + e.message); });
+    if (!App.categoriasSemNuvem) gravar(['categorias'], db, e => App.semCategoriasNaNuvem(e));
+  };
+  function gravar(colecoes, db, erro) {
     const ops = [];
-    for (const c of COLECOES) {
+    for (const c of colecoes) {
+      if (!Array.isArray(db[c])) continue;
       const atuais = new Map(db[c].map(x => [x.id, estavel(x)]));
       for (const [id, j] of atuais) if (enviado[c].get(id) !== j) ops.push(b => b.set(F.doc(fs, c, id), JSON.parse(j)));
       for (const id of enviado[c].keys()) if (!atuais.has(id)) ops.push(b => b.delete(F.doc(fs, c, id)));
@@ -45,9 +51,9 @@ async function iniciar() {
     for (let i = 0; i < ops.length; i += 400) {
       const lote = F.writeBatch(fs);
       ops.slice(i, i + 400).forEach(op => op(lote));
-      lote.commit().catch(e => { console.error(e); alert('Não foi possível salvar na nuvem: ' + e.message); });
+      lote.commit().catch(erro);
     }
-  };
+  }
 
   // Triagem de extrato em andamento: um documento só (triagens/atual), compartilhado entre os aparelhos.
   const refTriagem = F.doc(fs, 'triagens', 'atual');
@@ -65,7 +71,12 @@ async function iniciar() {
     App.carregando();
     const recebido = {};
     let negado = false;
-    App.triagemSemNuvem = null;
+    App.triagemSemNuvem = null; App.categoriasSemNuvem = null;
+    escutas.push(F.onSnapshot(F.collection(fs, 'categorias'), snap => {
+      const docs = snap.docs.map(d => ({ ...d.data(), id: d.id }));
+      enviado.categorias = new Map(docs.map(x => [x.id, estavel(x)]));
+      App.receberCategorias(docs);
+    }, e => App.semCategoriasNaNuvem(e)));
     escutas.push(F.onSnapshot(refTriagem, snap => App.receberTriagem(snap.exists() ? snap.data().dados : null),
       e => App.semTriagemNaNuvem(e)));
     COLECOES.forEach(c => escutas.push(F.onSnapshot(F.collection(fs, c), snap => {
