@@ -808,3 +808,6 @@ dialog[open]::backdrop { animation: fundo .25s ease-out; }
   /* 5 abas na barra do celular: rótulos um pouco menores */
   .nav button { font-size: 10.5px; }
 }
+
+/* Transferência entre contas: neutra (não entra no saldo) */
+.mov-val.transf { color: var(--muted); font-weight: 500; }

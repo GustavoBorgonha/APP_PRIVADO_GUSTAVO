@@ -26,6 +26,8 @@ PWA em JavaScript puro (sem framework, sem build) para finanças pessoais e plan
   ✌️ (feliz) e golpe de kung fu (bravo). Acessórios ficam no localStorage (`apg-panda`), por aparelho,
   e são escolhidos no "Provador do panda" da aba Dados (`vSeuPanda`: cartões com mini pandas).
   `icons/panda.svg` e `icons/icon.svg` são gerados a partir do `PandaSVG`. Fonte Outfit em `fonts/`.
+- Categoria "Transferência entre contas" (`TRANSF`): aparece no extrato, mas fica fora de receitas,
+  despesas e saldo (`contaNoSaldo`). Na importação é sugerida quando o nome do usuário aparece no movimento.
 - `app.js` — toda a lógica e as telas (Início, Finanças, Extratos, Planos, Dados).
   O estado fica em `db = { lancamentos, planos }`; toda mudança chama `salvar()` e `render()`.
 - `extrato.js` — lê extratos do banco (OFX e CSV com Crédito/Débito) e sugere descrição/categoria

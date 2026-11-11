@@ -76,6 +76,16 @@ async function modoLocal(navegador, url, erros) {
   const saldo = await p.textContent('.hero .saldo-val');
   confere(saldo.replace(/\s/g, ' ').includes('5.500,00'), 'saldo do mês = 8000 − 2500');
 
+  // Transferência entre contas aparece no extrato, mas não mexe no saldo.
+  await p.click('.atalho >> text=Despesa');
+  await p.fill('[name=valor]', '1000'); await p.fill('[name=desc]', 'Pix para a outra conta'); await p.fill('[name=categoria]', 'Transferência entre contas');
+  await p.click('dialog >> text=Salvar');
+  await p.click('.nav >> text=Início');
+  confere((await p.textContent('.hero .saldo-val')).replace(/\s/g, ' ').includes('5.500,00'), 'transferência entre contas não altera o saldo');
+  await p.click('.nav >> text=Finanças');
+  confere(await p.isVisible('.mov-val.transf') && (await p.textContent('.hero .chips')).includes('Entre contas'), 'transferência aparece no extrato, separada');
+  await p.click('.nav >> text=Início');
+
   await p.click('text=+ Novo plano');
   await p.selectOption('[name=tipo]', 'casamento');
   await p.fill('[name=nome]', 'Nosso casamento'); await p.fill('[name=meta]', '60000');

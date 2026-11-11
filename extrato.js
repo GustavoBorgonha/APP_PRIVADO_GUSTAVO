@@ -122,6 +122,8 @@
     [/cinema|ingresso|steam|playstation|xbox/, 'Lazer'],
     [/investimento|aplicacao|\bcdb\b|tesouro|poupanca/, 'Investimentos'],
   ];
+  const TRANSF = 'Transferência entre contas';
+  const RE_TRANSF = /transferencia entre contas|mesma titularidade|entre contas proprias|transf(erencia)? para conta propria/;
   const REGRAS_RECEITA = [
     [/c\/sal|salario|folha/, 'Salário'],
     [/devolvid|estorno|reembolso/, 'Reembolso'],
@@ -145,9 +147,10 @@
       const antigo = jaImportado.get(it.origem);   // já está nas finanças: mostra como foi lançado
       const desc = antigo ? antigo.desc : descricao(it);
       const regras = it.tipo === 'receita' ? REGRAS_RECEITA : REGRAS_DESPESA;
-      const categoria = (antigo && antigo.categoria) || conhecidas.get(semAcento(it.categoriaArquivo)) || aprendido.get(semAcento(desc)) || (regras.find(([re]) => re.test(texto)) || [])[1] || 'Outros';
+      const proprio = meuNome && meuNome.every(p => texto.includes(p));   // seu nome no movimento
+      const categoria = (antigo && antigo.categoria) || (proprio || RE_TRANSF.test(texto) ? TRANSF : '') || conhecidas.get(semAcento(it.categoriaArquivo)) || aprendido.get(semAcento(desc)) || (regras.find(([re]) => re.test(texto)) || [])[1] || 'Outros';
       const avisos = [];
-      if (meuNome && meuNome.every(p => texto.includes(p))) avisos.push('Parece transferência entre as suas próprias contas.');
+      if (proprio) avisos.push('Seu nome aparece no movimento: sugeri "Transferência entre contas", que não entra no saldo.');
       if (ctx.meio === 'credito' && it.tipo === 'receita' && /pagamento|pagto/.test(texto)) avisos.push('Pagamento da fatura: normalmente se ignora aqui, porque as compras já estão lançadas uma a uma.');
       else if (/fatura/.test(texto)) avisos.push('Pagamento de fatura: cuidado para não contar as compras do cartão duas vezes.');
       return { id: 't' + i, origem: it.origem, data: it.data, valor: it.valor, tipo: it.tipo, bruto: it.bruto, desc, categoria, fixo: false, avisos,

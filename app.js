@@ -8,9 +8,14 @@
 const CHAVE = 'apg-dados-v1';
 
 const CATEGORIAS = {
-  despesa: ['Moradia', 'Alimentação', 'Mercado', 'Transporte', 'Saúde', 'Educação', 'Lazer', 'Contas', 'Compras', 'Assinaturas', 'Cuidados pessoais', 'Cartão de crédito', 'Tarifas bancárias', 'Investimentos', 'Outros'],
-  receita: ['Salário', 'Renda extra', 'Rendimentos', 'Reembolso', 'Outros'],
+  despesa: ['Moradia', 'Alimentação', 'Mercado', 'Transporte', 'Saúde', 'Educação', 'Lazer', 'Contas', 'Compras', 'Assinaturas', 'Cuidados pessoais', 'Cartão de crédito', 'Tarifas bancárias', 'Investimentos', 'Transferência entre contas', 'Outros'],
+  receita: ['Salário', 'Renda extra', 'Rendimentos', 'Reembolso', 'Transferência entre contas', 'Outros'],
 };
+/* Transferência entre contas (salário indo de uma conta para outra, dinheiro entre as contas do casal):
+   aparece no extrato, mas NÃO conta como receita nem despesa, para não somar o mesmo dinheiro duas vezes. */
+const TRANSF = 'Transferência entre contas';
+const ehTransf = l => l.categoria === TRANSF;
+const contaNoSaldo = l => !ehTransf(l);
 
 const TIPOS = {
   viagem: {
@@ -175,7 +180,7 @@ const IC = {
 const ICONE_CAT = {
   'Moradia': '🏠', 'Alimentação': '🍽️', 'Mercado': '🛒', 'Transporte': '🚌', 'Saúde': '💊', 'Educação': '📚',
   'Lazer': '🎉', 'Contas': '🧾', 'Compras': '🛍️', 'Assinaturas': '📺', 'Investimentos': '📈', 'Outros': '📦',
-  'Cuidados pessoais': '💈', 'Cartão de crédito': '💳', 'Tarifas bancárias': '🏦',
+  'Transferência entre contas': '🔄', 'Cuidados pessoais': '💈', 'Cartão de crédito': '💳', 'Tarifas bancárias': '🏦',
   'Salário': '💼', 'Renda extra': '✨', 'Rendimentos': '📈', 'Reembolso': '↩️',
 };
 const MEIOS = { debito: 'débito', credito: 'crédito' };
@@ -221,7 +226,7 @@ function render() {
 
 /* Humor "de fundo" do panda: fica tristinho com o saldo do mês no vermelho. */
 App.humorBase = () => {
-  const l = lancMes(mesAtual());
+  const l = lancMes(mesAtual()).filter(contaNoSaldo);
   return soma(l, x => x.tipo === 'receita' ? x.valor : -x.valor) < 0 ? 'triste' : 'fofo';
 };
 
@@ -256,7 +261,7 @@ function itemExtrato(x, opc = {}) {
     <span class="mov-ic ${x.tipo}">${iconeCat(x.categoria, x.tipo)}</span>
     <span class="mov-txt"><strong>${esc(x.desc)}${x.fixo ? ' <span class="fixo" title="Lançamento fixo">🔁</span>' : ''}</strong>
       <small>${esc(x.categoria)}${opc.data ? ' · ' + fmtData(x.data).slice(0, 5) : ''}${rotuloOrigem(x) ? ' · ' + esc(rotuloOrigem(x)) : ''}</small></span>
-    <span class="mov-val ${x.tipo === 'receita' ? 'pos' : ''}">${x.tipo === 'receita' ? '+' : '−'} ${din(x.valor)}</span>
+    <span class="mov-val ${ehTransf(x) ? 'transf' : x.tipo === 'receita' ? 'pos' : ''}" ${ehTransf(x) ? 'title="Transferência: não entra no saldo"' : ''}>${x.tipo === 'receita' ? '+' : '−'} ${din(x.valor)}</span>
     ${opc.apagar ? `<button class="x" data-a="apagarLanc" data-v="${x.id}" title="Apagar" aria-label="Apagar lançamento">✕</button>` : ''}
   </div>`;
 }
@@ -278,7 +283,7 @@ function avisoTriagem() {
 }
 
 function vInicio() {
-  const l = lancMes(mesAtual());
+  const l = lancMes(mesAtual()).filter(contaNoSaldo);
   const rec = soma(l.filter(x => x.tipo === 'receita'), x => x.valor);
   const des = soma(l.filter(x => x.tipo === 'despesa'), x => x.valor);
   const totalGuardado = soma(db.planos, guardado);
@@ -331,10 +336,12 @@ function vInicio() {
 
 function vFinancas() {
   const l = lancMes(ui.mes).sort((a, b) => b.data.localeCompare(a.data));
-  const rec = soma(l.filter(x => x.tipo === 'receita'), x => x.valor);
-  const des = soma(l.filter(x => x.tipo === 'despesa'), x => x.valor);
+  const valem = l.filter(contaNoSaldo), tr = l.filter(ehTransf);
+  const rec = soma(valem.filter(x => x.tipo === 'receita'), x => x.valor);
+  const des = soma(valem.filter(x => x.tipo === 'despesa'), x => x.valor);
+  const trEntrou = soma(tr.filter(x => x.tipo === 'receita'), x => x.valor), trSaiu = soma(tr.filter(x => x.tipo === 'despesa'), x => x.valor);
   const porCat = {};
-  l.filter(x => x.tipo === 'despesa').forEach(x => porCat[x.categoria] = (porCat[x.categoria] || 0) + x.valor);
+  valem.filter(x => x.tipo === 'despesa').forEach(x => porCat[x.categoria] = (porCat[x.categoria] || 0) + x.valor);
   const cats = Object.entries(porCat).sort((a, b) => b[1] - a[1]);
   const visiveis = ui.filtro === 'todos' ? l : l.filter(x => x.tipo === ui.filtro);
   const dias = [];
@@ -358,6 +365,7 @@ function vFinancas() {
           <span class="chip"><i class="seta pos">${IC.receita}</i>Receitas <b>${din(rec)}</b></span>
           <span class="chip"><i class="seta neg">${IC.despesa}</i>Despesas <b>${din(des)}</b></span>
           <span class="chip">Economia <b>${rec ? ((rec - des) / rec * 100).toFixed(0) : 0}%</b></span>
+          ${tr.length ? `<span class="chip" title="Não entram no saldo">🔄 Entre contas <b>${trEntrou ? '+' + din(trEntrou) : ''}${trEntrou && trSaiu ? ' / ' : ''}${trSaiu ? '−' + din(trSaiu) : ''}</b></span>` : ''}
         </div>
       </div>
     </div>
@@ -375,7 +383,7 @@ function vFinancas() {
           <div class="filtros">${[['todos', 'Tudo'], ['receita', 'Receitas'], ['despesa', 'Despesas']].map(([f, r]) =>
             `<button class="${ui.filtro === f ? 'on' : ''}" data-a="filtro" data-v="${f}">${r}</button>`).join('')}</div></div>
         ${dias.length ? dias.map(d => `
-          <div class="dia"><span>${rotuloDia(d.data)}</span><span>${din(soma(d.itens, x => x.tipo === 'receita' ? x.valor : -x.valor))}</span></div>
+          <div class="dia"><span>${rotuloDia(d.data)}</span><span>${din(soma(d.itens.filter(contaNoSaldo), x => x.tipo === 'receita' ? x.valor : -x.valor))}</span></div>
           <div class="movs">${d.itens.map(x => itemExtrato(x, { apagar: true })).join('')}</div>`).join('')
       : `<div class="vazio">${panda('preguica')}Nenhum lançamento em ${nomeMes(ui.mes)}.</div>`}
       </div>
