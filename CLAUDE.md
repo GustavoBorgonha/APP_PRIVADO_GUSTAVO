@@ -21,7 +21,8 @@ PWA em JavaScript puro (sem framework, sem build) para finanças pessoais e plan
   (`ui.oculto`; use `din()` para dinheiro na tela), atalhos (`.atalhos`), extrato por dia (`itemExtrato`).
   Animação de entrada só ao trocar de tela (classe `entrando` no `#app`); janelas viram "folha" no celular.
   Mascote: panda em `panda.js` (`PandaSVG` desenha humores/acessórios; `Mascote` cuida de reações,
-  cochilo por inatividade e falas). Acessórios ficam no localStorage (`apg-panda`), por aparelho.
+  cochilo por inatividade e falas). Estilo chibi; poses por humor: deitado (preguiça/dormindo, com lua),
+  ✌️ (feliz) e golpe de kung fu (bravo). Acessórios ficam no localStorage (`apg-panda`), por aparelho.
   `icons/panda.svg` e `icons/icon.svg` são gerados a partir do `PandaSVG`. Fonte Outfit em `fonts/`.
 - `app.js` — toda a lógica e as telas (Início, Finanças, Planos, Simulador, Dados).
   O estado fica em `db = { lancamentos, planos }`; toda mudança chama `salvar()` e `render()`.

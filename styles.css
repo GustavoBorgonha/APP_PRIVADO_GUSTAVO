@@ -644,3 +644,18 @@ dialog[open]::backdrop { animation: fundo .25s ease-out; }
 .panda-svg .pe.d { animation-delay: .45s; }
 @keyframes orelha { 0%, 82%, 100% { transform: none; } 86% { transform: rotate(-10deg) scale(.94); } 90% { transform: rotate(6deg); } 94% { transform: rotate(-4deg); } }
 @keyframes pezinho { 0%, 100% { transform: none; } 50% { transform: rotate(-7deg) translateY(-1.5px); } }
+
+/* Panda: poses novas (deitado, ✌️ e golpe de kung fu) */
+.panda-svg .dorso, .panda-svg .gesto, .panda-svg .lua { transform-box: fill-box; }
+.panda-svg .dorso { transform-origin: 50% 100%; animation: dorso 4.2s ease-in-out infinite; }
+.panda-svg .lua { transform-origin: center; animation: lua 6s ease-in-out infinite; }
+.panda-svg.h-feliz .gesto { transform-origin: 90% 90%; animation: acenar .9s ease-in-out infinite; }
+.panda-svg.h-bravo .gesto { transform-origin: 100% 50%; animation: golpe 1.2s cubic-bezier(.3, 1.6, .5, 1) infinite; }
+/* Deitado, a cabeça só balança de leve (sem afundar no chão). */
+.panda-svg.h-preguica .cabeca { animation: deitado 5s ease-in-out infinite; }
+.panda-svg.h-dormindo .cabeca { animation: deitado 4.2s ease-in-out infinite; }
+@keyframes dorso { 0%, 100% { transform: none; } 50% { transform: scale(1.01, 1.06); } }
+@keyframes lua { 0%, 100% { transform: rotate(-4deg); } 50% { transform: rotate(5deg) translateY(-2px); } }
+@keyframes acenar { 0%, 100% { transform: rotate(-6deg); } 50% { transform: rotate(9deg); } }
+@keyframes golpe { 0%, 55%, 100% { transform: none; } 20% { transform: translateX(12px) scaleX(.85); } 32% { transform: translateX(-5px) scaleX(1.06); } }
+@keyframes deitado { 0%, 100% { transform: rotate(-2deg); } 50% { transform: rotate(2deg) translateY(-1.5px); } }

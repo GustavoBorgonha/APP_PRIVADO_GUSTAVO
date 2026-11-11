@@ -123,7 +123,7 @@
     const brilho = (x, y, cls) => `<g transform="translate(${x} ${y})"><path class="fx ${cls}" d="M0 -8 Q1 -1 8 0 Q1 1 0 8 Q-1 1 -8 0 Q-1 -1 0 -8Z" fill="#f6cf62"/></g>`;
     if (h === 'feliz') return coracao(184, 26, 'sobe') + coracao(14, 62, 'sobe d2') + brilho(18, 22, 'pisca');
     if (h === 'fofo') return brilho(186, 22, 'pisca') + brilho(14, 26, 'pisca d2');
-    if (h === 'dormindo') return [0, 1, 2].map(i => `<text class="fx zzz d${i}" x="${164 + i * 10}" y="${34 - i * 11}" font-size="${13 + i * 5}" font-weight="700" font-family="Outfit, sans-serif">z</text>`).join('');
+    if (h === 'dormindo') return [0, 1, 2].map(i => `<text class="fx zzz d${i}" x="${92 + i * 11}" y="${58 - i * 12}" font-size="${13 + i * 5}" font-weight="700" font-family="Outfit, sans-serif">z</text>`).join('');
     return '';
   }
 
@@ -207,8 +207,40 @@
       <g transform="translate(100 88) scale(1.09) translate(-100 -92)">${cabecaAcessorio(o.cabeca)}</g>
     </g>`;
 
-    return `<svg class="panda-svg h-${h}" viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">` +
-      chao + rabo + vara + barriga + pes + bracoE + bracoD + cabeca + cachecol + fx + `</svg>`;
+    const abre = `<svg class="panda-svg h-${h}" viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">`;
+
+    // Pose deitada (preguiça e sono): de bruços, queixo no chão e patinhas para a frente.
+    if (h === 'preguica' || h === 'dormindo') {
+      const pata = x => `<ellipse cx="${x}" cy="185.5" rx="15.5" ry="8.5" fill="${P}" ${t}/>`;
+      const dorso = `<g class="dorso"><circle cx="190" cy="168" r="6.5" fill="${B}" ${t}/>` +
+        `<path d="M92 190 C92 152 120 132 150 134 C178 136 195 156 193 176 C192 186 186 190 178 190 Z" fill="${corpo}" stroke="${borda}" stroke-width="2.6" stroke-linejoin="round"/>` +
+        (vestido ? '' : `<path d="M98 189 C98 160 110 144 126 137 C140 142 148 162 144 189 Z" fill="${P}"/>`) +
+        `<ellipse cx="174" cy="181" rx="16" ry="10" fill="${P}" ${t}/></g>`;
+      const noite = h === 'dormindo' && o.efeitos !== false
+        ? `<path class="lua" d="M160 14 A19 19 0 1 0 181 40 A15 15 0 1 1 160 14 Z" fill="#f6dd8c" stroke="#dcbb5c" stroke-width="1.6" stroke-linejoin="round"/>` +
+          `<g transform="translate(132 20) scale(.55)"><path class="fx pisca" d="M0 -8 Q1 -1 8 0 Q1 1 0 8 Q-1 1 -8 0 Q-1 -1 0 -8Z" fill="#f6cf62"/></g>` +
+          `<g transform="translate(188 66) scale(.7)"><path class="fx pisca d2" d="M0 -8 Q1 -1 8 0 Q1 1 0 8 Q-1 1 -8 0 Q-1 -1 0 -8Z" fill="#f6cf62"/></g>`
+        : '';
+      return abre + `<ellipse cx="100" cy="193" rx="94" ry="5.5" fill="#000" opacity=".09"/>` + noite + dorso +
+        `<g transform="translate(-8 60) scale(.9)">${cabeca}</g>` + pata(44) + pata(116) + fx + `</svg>`;
+    }
+
+    // Feliz: faz ✌️ com a patinha. Bravo: golpe de kung fu com a pata aberta.
+    let gesto = '';
+    if (h === 'feliz') {
+      gesto = `<ellipse cx="47" cy="148" rx="12.5" ry="20" transform="rotate(-36 47 148)" fill="${manga}" stroke="${borda}" stroke-width="2.6"/>` +
+        `<path d="M31 131 L23 114 M38 128 L37 111" stroke="${C}" stroke-width="11" stroke-linecap="round"/>` +
+        `<circle cx="35" cy="132" r="9.5" fill="${P}" ${t}/>` +
+        `<path d="M31 131 L23 114 M38 128 L37 111" stroke="${P}" stroke-width="6.5" stroke-linecap="round"/>`;
+    } else if (h === 'bravo') {
+      gesto = `<ellipse cx="42" cy="152" rx="12.5" ry="22" transform="rotate(76 42 152)" fill="${manga}" stroke="${borda}" stroke-width="2.6"/>` +
+        `<circle cx="19" cy="146" r="11" fill="${P}" ${t}/><ellipse cx="18" cy="148" rx="4.6" ry="4" fill="${ALMOFADA}"/>` +
+        `<circle cx="12.5" cy="141.5" r="2" fill="${ALMOFADA}"/><circle cx="18" cy="139.5" r="2" fill="${ALMOFADA}"/><circle cx="23.5" cy="141.5" r="2" fill="${ALMOFADA}"/>` +
+        `<path d="M4 132 l-4 -3 M2 146 h-2 M5 160 l-4 3" stroke="${C}" stroke-width="2" stroke-linecap="round" opacity=".5"/>`;
+    }
+
+    return abre + chao + rabo + vara + barriga + pes + (gesto ? '' : bracoE) + bracoD + cabeca + cachecol +
+      (gesto ? `<g class="gesto">${gesto}</g>` : '') + fx + `</svg>`;
   }
 
   g.PandaSVG = PandaSVG;
