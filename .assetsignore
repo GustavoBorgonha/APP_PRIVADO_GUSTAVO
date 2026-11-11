@@ -1,0 +1,11 @@
+# Arquivos do repositório que NÃO vão para o site no Cloudflare.
+.git
+.github
+node_modules
+tests
+*.md
+netlify.toml
+wrangler.jsonc
+.assetsignore
+.gitignore
+firestore.rules

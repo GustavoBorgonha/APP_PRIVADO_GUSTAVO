@@ -1,0 +1,9 @@
+// Publicação no Cloudflare (Workers com arquivos estáticos): o site é só esta pasta, sem build.
+// O nome precisa ser o mesmo do projeto criado no painel do Cloudflare.
+{
+  "name": "appgustavo",
+  "compatibility_date": "2025-09-01",
+  "assets": {
+    "directory": "./"
+  }
+}
