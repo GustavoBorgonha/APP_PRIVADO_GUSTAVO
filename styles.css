@@ -630,3 +630,17 @@ dialog[open]::backdrop { animation: fundo .25s ease-out; }
   .chips { flex-wrap: nowrap; overflow-x: auto; margin: 0 -22px; padding: 0 22px; scrollbar-width: none; }
   .chips::-webkit-scrollbar { display: none; }
 }
+
+/* Panda: orelhas que mexem e patinhas que balançam */
+.panda-svg .orelha, .panda-svg .pe { transform-box: fill-box; }
+.panda-svg .orelha { transform-origin: 50% 85%; animation: orelha 5s ease-in-out infinite; }
+.panda-svg .orelha.d { animation-delay: .18s; }
+.panda-svg.h-feliz .orelha { animation-duration: 1.8s; }
+.panda-svg.h-triste .orelha.e, .panda-svg.h-dormindo .orelha.e { animation: none; transform: rotate(-12deg) translateY(2px); }
+.panda-svg.h-triste .orelha.d, .panda-svg.h-dormindo .orelha.d { animation: none; transform: rotate(12deg) translateY(2px); }
+.panda-svg .pe { transform-origin: 50% 100%; }
+.panda-svg.h-fofo .pe { animation: pezinho 3.4s ease-in-out infinite; }
+.panda-svg.h-feliz .pe { animation: pezinho .9s ease-in-out infinite; }
+.panda-svg .pe.d { animation-delay: .45s; }
+@keyframes orelha { 0%, 82%, 100% { transform: none; } 86% { transform: rotate(-10deg) scale(.94); } 90% { transform: rotate(6deg); } 94% { transform: rotate(-4deg); } }
+@keyframes pezinho { 0%, 100% { transform: none; } 50% { transform: rotate(-7deg) translateY(-1.5px); } }
