@@ -127,6 +127,23 @@ let db = carregar();
 const ui = { aba: 'inicio', mes: mesAtual(), plano: null, filtro: 'todos', oculto: false };
 try { ui.oculto = localStorage.getItem('apg-oculto') === '1'; } catch (e) { /* sem armazenamento */ }
 
+/* Triagem em andamento: fica salva NESTE aparelho para poder continuar depois de fechar o app.
+   ui.triagem = a triagem (aberta ou pausada); ui.naTriagem = se a tela dela está aberta. */
+const CHAVE_TRIAGEM = 'apg-triagem';
+try { ui.triagem = JSON.parse(localStorage.getItem(CHAVE_TRIAGEM)) || null; } catch (e) { ui.triagem = null; }
+ui.naTriagem = false;
+function guardarTriagem() {
+  try {
+    if (ui.triagem) localStorage.setItem(CHAVE_TRIAGEM, JSON.stringify(ui.triagem));
+    else localStorage.removeItem(CHAVE_TRIAGEM);
+  } catch (e) { /* sem armazenamento */ }
+}
+// Se algum lançamento confirmado foi apagado enquanto a triagem estava pausada, ele volta a ficar pendente.
+function conferirTriagem() {
+  const ids = new Set(db.lancamentos.map(l => l.id));
+  ui.triagem?.itens.forEach(i => { if (i.estado === 'ok' && !ids.has(i.lancId)) { i.estado = 'pendente'; delete i.lancId; } });
+}
+
 /* ---------- ícones e rótulos ---------- */
 const svg = d => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${d}</svg>`;
 const IC = {
@@ -170,13 +187,16 @@ const lancMes = m => db.lancamentos.filter(l => l.data.startsWith(m));
 /* ---------- renderização ---------- */
 function render() {
   App.renderPendente = false;
+  if (ui.triagem && !ui.triagem.itens) ui.triagem = null;
+  if (!ui.triagem) ui.naTriagem = false;
+  guardarTriagem();
   document.body.classList.toggle('sem-nav', App.modo === 'carregando' || App.modo === 'login');
   document.body.dataset.aba = ui.aba;
   if (App.modo === 'carregando') { $('#app').innerHTML = `<div class="carregando">${panda()}Carregando seus dados…</div>`; return; }
   if (App.modo === 'login') { $('#app').innerHTML = vLogin(); return; }
   document.querySelectorAll('.nav button').forEach(b => b.classList.toggle('ativo', b.dataset.v === ui.aba));
   const views = { inicio: vInicio, financas: vFinancas, planos: vPlanos, dados: vDados };
-  const tela = ui.aba + '|' + (ui.aba === 'planos' ? ui.plano || '' : ui.aba === 'financas' && ui.triagem ? 'triagem' : '');
+  const tela = ui.aba + '|' + (ui.aba === 'planos' ? ui.plano || '' : ui.aba === 'financas' && ui.naTriagem ? 'triagem' : '');
   const trocou = tela !== render.tela; render.tela = tela;
   const app = $('#app');
   app.classList.remove('entrando');
@@ -231,6 +251,18 @@ function botaoOlho() {
   return `<button class="olho" data-a="olho" aria-label="${ui.oculto ? 'Mostrar valores' : 'Ocultar valores'}" title="${ui.oculto ? 'Mostrar valores' : 'Ocultar valores'}">${ui.oculto ? IC.olhoFechado : IC.olho}</button>`;
 }
 
+function avisoTriagem() {
+  const t = ui.triagem; if (!t || ui.naTriagem) return '';
+  const pend = t.itens.filter(i => i.estado === 'pendente').length;
+  const ok = t.itens.filter(i => i.estado === 'ok').length;
+  return `<div class="card tri-pausada">
+    <span class="mov-ic">🧾</span>
+    <div class="mov-txt"><strong>Triagem em andamento</strong>
+      <small>${esc(t.banco)} ${t.meio === 'credito' ? 'crédito' : 'débito'} · ${esc(t.arquivo)} · ${pend} ${pend === 1 ? 'pendente' : 'pendentes'}${ok ? ` · ${ok} ${ok === 1 ? 'confirmado' : 'confirmados'}` : ''}</small></div>
+    <div class="acoes"><button class="btn" data-a="descartarTriagem">Descartar</button><button class="btn pri" data-a="retomarTriagem">Continuar triagem</button></div>
+  </div>`;
+}
+
 function vInicio() {
   const l = lancMes(mesAtual());
   const rec = soma(l.filter(x => x.tipo === 'receita'), x => x.valor);
@@ -240,6 +272,7 @@ function vInicio() {
   const pendentes = db.planos.flatMap(p => p.tarefas.filter(t => !t.feito).map(t => ({ ...t, plano: p }))).slice(0, 6);
   const atalho = (acao, valor, icone, rotulo) => `<button class="atalho" data-a="${acao}" ${valor ? `data-v="${valor}"` : ''}><span class="at-ic">${icone}</span><span>${rotulo}</span></button>`;
   return `
+    ${avisoTriagem()}
     <div class="hero">
       <div class="hero-txt">
         <p class="ola">Olá, ${esc(App.usuario?.nome?.split(' ')[0] || 'Gustavo')}</p>
@@ -283,7 +316,7 @@ function vInicio() {
 }
 
 function vFinancas() {
-  if (ui.triagem) return vTriagem();
+  if (ui.triagem && ui.naTriagem) return vTriagem();
   const l = lancMes(ui.mes).sort((a, b) => b.data.localeCompare(a.data));
   const rec = soma(l.filter(x => x.tipo === 'receita'), x => x.valor);
   const des = soma(l.filter(x => x.tipo === 'despesa'), x => x.valor);
@@ -295,6 +328,7 @@ function vFinancas() {
   visiveis.forEach(x => { const d = dias[dias.length - 1]; if (d && d.data === x.data) d.itens.push(x); else dias.push({ data: x.data, itens: [x] }); });
   const [ano, mes] = ui.mes.split('-');
   return `
+    ${avisoTriagem()}
     <div class="topo">
       <div><h1>Finanças</h1><p class="sub" style="margin:0">Seu extrato de receitas e despesas</p></div>
       <div class="mes-nav">
@@ -342,7 +376,7 @@ function vFinancas() {
 }
 
 /* ---------- triagem de extrato importado ----------
-   Os movimentos lidos do arquivo ficam em ui.triagem (só na memória) e NÃO entram nas
+   Os movimentos lidos do arquivo ficam em ui.triagem (salva no aparelho) e NÃO entram nas
    finanças sozinhos: cada um precisa de "Confirmar". "Ignorar" descarta. */
 function cartaoTriagem(i) {
   const campo = (f, extra) => `data-c="tri" data-i="${i.id}" data-f="${f}" ${extra || ''}`;
@@ -389,7 +423,7 @@ function vTriagem() {
   const feitos = total - pend.length;
   return `
     <div class="topo">
-      <div><button class="btn mini voltar" data-a="sairTriagem">${IC.voltar} Finanças</button>
+      <div><button class="btn mini voltar" data-a="sairTriagem" title="A triagem fica salva para continuar depois">${IC.voltar} Finanças</button>
         <h1 style="margin-top:10px">Triagem do extrato</h1>
         <p class="sub" style="margin:0"><span class="selo">${esc(t.banco)} · ${t.meio === 'credito' ? 'cartão de crédito' : 'conta (débito)'}</span>
           ${esc(t.arquivo)} · nada entra nas suas finanças sem você confirmar.</p></div>
@@ -423,6 +457,8 @@ function vTriagem() {
 }
 
 async function importarExtrato() {
+  if (ui.triagem && ui.triagem.itens.some(i => i.estado === 'pendente') &&
+      !confirm(`Você tem uma triagem em andamento (${ui.triagem.arquivo}).\n\nImportar outro extrato descarta os pendentes dela. Os já confirmados continuam salvos.\n\nContinuar?`)) return;
   const arq = await lerArquivo('.ofx,.csv,.txt'); if (!arq) return;
   const det = Extrato.detectar(arq.nome, arq.texto);
   let ultimo = {};
@@ -453,7 +489,7 @@ async function importarExtrato() {
     } catch (e) { console.error(e); }
     if (!itens.length) return alert('Não encontrei lançamentos neste arquivo. Use o extrato em OFX ou CSV baixado do seu banco.');
     ui.triagem = { arquivo: arq.nome, ...opc, itens, lote: uid(), em: hoje() };
-    ui.aba = 'financas'; ui.plano = null;
+    ui.naTriagem = true; ui.aba = 'financas'; ui.plano = null;
   });
 }
 const itemTriagem = id => ui.triagem?.itens.find(i => i.id === id);
@@ -788,12 +824,19 @@ const acoes = {
     // Se outro igual já estava lançado antes desta importação, volta para a lista de "já importados".
     if (!i.forcar && db.lancamentos.some(l => l.origem && l.origem === i.origem)) i.estado = 'duplicado';
   },
+  // Voltar: se ainda há pendentes, a triagem fica pausada (salva) para continuar depois.
   sairTriagem: () => {
     const t = ui.triagem; if (!t) return;
-    const pend = t.itens.filter(i => i.estado === 'pendente').length;
-    if (pend && !confirm(`Ainda ${pend === 1 ? 'há 1 lançamento' : `há ${pend} lançamentos`} sem revisar. Sair mesmo assim?\n(Os já confirmados continuam salvos.)`)) return;
     const ultimo = t.itens.filter(i => i.estado === 'ok').map(i => i.data).sort().pop();
     if (ultimo) ui.mes = ultimo.slice(0, 7);
+    ui.naTriagem = false;
+    if (!t.itens.some(i => i.estado === 'pendente')) ui.triagem = null;
+  },
+  retomarTriagem: () => { if (!ui.triagem) return; conferirTriagem(); ui.naTriagem = true; ui.aba = 'financas'; ui.plano = null; },
+  descartarTriagem: () => {
+    const t = ui.triagem; if (!t) return;
+    const pend = t.itens.filter(i => i.estado === 'pendente').length;
+    if (!confirm(`Descartar a triagem de "${t.arquivo}"?\n\n${pend === 1 ? 'O lançamento pendente não será importado' : `Os ${pend} lançamentos pendentes não serão importados`}. Os já confirmados continuam salvos (para tirar, use "Cancelar importação").`)) return;
     ui.triagem = null;
   },
   novoPlano: v => modalPlano(null, v),
@@ -828,7 +871,8 @@ const acoes = {
   sortearPanda: () => Panda.sortear(),
   fecharModal,
   entrar: () => { App.msgLogin = ''; return Promise.resolve(App.entrar?.()); },
-  sair: () => Promise.resolve(App.sair?.()),
+  // Ao sair da conta, a triagem salva neste aparelho é apagada (para a próxima pessoa não ver o extrato).
+  sair: () => { ui.triagem = null; guardarTriagem(); return Promise.resolve(App.sair?.()); },
 };
 
 document.addEventListener('click', e => {
@@ -858,6 +902,7 @@ document.addEventListener('change', e => {
     // Edição na triagem: só guarda o valor; nada vai para as finanças antes do "Confirmar".
     const i = itemTriagem(el.dataset.i), f = el.dataset.f; if (!i) return;
     i[f] = f === 'fixo' ? el.checked : f === 'valor' ? Math.abs(parseValor(el.value)) : el.value;
+    guardarTriagem();
     if (f === 'tipo' || f === 'categoria' || f === 'valor') render();
     return;
   }

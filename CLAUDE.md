@@ -34,7 +34,9 @@ PWA em JavaScript puro (sem framework, sem build) para finanças pessoais e plan
   Duplicados: mesmo `origem` fica fora da triagem (estado `duplicado`); mesma data+valor+tipo pede
   confirmação extra ao confirmar (`parecido`).
   Cada importação tem um `lote` (salvo no lançamento com `loteArquivo`/`loteEm`): "Cancelar importação"
-  na triagem ou na aba Dados (`vImportacoes`) apaga todos os lançamentos daquele lote. Não versionar extratos reais; os testes usam
+  na triagem ou na aba Dados (`vImportacoes`) apaga todos os lançamentos daquele lote.
+  A triagem fica salva no aparelho (`apg-triagem`): "Voltar" pausa, e o aviso "Triagem em andamento"
+  (Início/Finanças) permite continuar ou descartar. É apagada ao sair da conta. Não versionar extratos reais; os testes usam
   extratos de mentira.
 - `nuvem.js` — login e sincronização. `App.sincronizar(db)` envia só o que mudou; os
   `onSnapshot` chamam `App.receber()`.

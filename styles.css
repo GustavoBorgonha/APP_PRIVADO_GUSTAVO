@@ -773,3 +773,13 @@ dialog[open]::backdrop { animation: fundo .25s ease-out; }
 .escolha input:focus-visible + span { outline: 2px solid var(--acento); outline-offset: 2px; }
 .escolha:active > span { transform: scale(.97); }
 @media (max-width: 420px) { .escolhas { grid-template-columns: 1fr; } }
+
+/* Aviso de triagem pausada */
+.tri-pausada {
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap; padding: 14px 18px;
+  background: var(--acento-suave); border-color: color-mix(in srgb, var(--acento) 35%, transparent);
+}
+.tri-pausada .mov-ic { background: var(--card); }
+.tri-pausada .mov-txt { flex: 1 1 200px; }
+.tri-pausada .mov-txt small { overflow-wrap: anywhere; }
+@media (max-width: 520px) { .tri-pausada .acoes { flex: 1 0 100%; } .tri-pausada .acoes .btn { flex: 1; } }

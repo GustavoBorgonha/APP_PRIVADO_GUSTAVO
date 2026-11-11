@@ -139,8 +139,14 @@ async function importacaoExtrato(navegador, url, erros) {
   await p.locator('.tri-feito', { hasText: 'Lanche da tarde' }).locator('[data-a=triDesfazer]').click();
   confere((await salvos()).length === 0 && await p.locator('.tri').count() === 2, 'desfazer tira o lançamento e devolve para a triagem');
   await cartao('LANCHONETE').locator('[data-a=triConfirmar]').click();
-  await p.click('[data-a=sairTriagem]');   // sai com pendentes (confirma o aviso)
+  await p.click('[data-a=sairTriagem]');   // sai com pendentes: a triagem fica pausada
   confere((await salvos()).length === 1 && await p.isVisible('text=Extrato'), 'sair da triagem mantém só o que foi confirmado');
+  confere(await p.isVisible('text=Triagem em andamento'), 'sair com pendentes deixa a triagem pausada');
+  await p.reload();
+  confere(await p.isVisible('text=Triagem em andamento'), 'triagem pausada continua lá depois de fechar e abrir o app');
+  await p.click('[data-a=retomarTriagem]');
+  confere(await p.locator('.tri').count() === 1 && await cartao('CONDOMINIO').count() === 1, 'continuar triagem volta com os pendentes');
+  await p.click('[data-a=sairTriagem]');
 
   await importar('extrato.ofx', OFX_TESTE, 'Inter');
   confere(await p.locator('.tri').count() === 2 && await p.locator('.tri-dups .tri-feito', { hasText: 'Lanche da tarde' }).count() === 1,
