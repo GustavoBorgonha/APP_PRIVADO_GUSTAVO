@@ -32,7 +32,9 @@ PWA em JavaScript puro (sem framework, sem build) para finanças pessoais e plan
   `app.js`) exige "Confirmar" em cada um. O lançamento confirmado guarda `origem` (ex.: `ofx:FITID`)
   além de `banco` e `meio` (`debito`/`credito`), escolhidos na janela "De onde é este extrato?".
   Duplicados: mesmo `origem` fica fora da triagem (estado `duplicado`); mesma data+valor+tipo pede
-  confirmação extra ao confirmar (`parecido`). Não versionar extratos reais; os testes usam
+  confirmação extra ao confirmar (`parecido`).
+  Cada importação tem um `lote` (salvo no lançamento com `loteArquivo`/`loteEm`): "Cancelar importação"
+  na triagem ou na aba Dados (`vImportacoes`) apaga todos os lançamentos daquele lote. Não versionar extratos reais; os testes usam
   extratos de mentira.
 - `nuvem.js` — login e sincronização. `App.sincronizar(db)` envia só o que mudou; os
   `onSnapshot` chamam `App.receber()`.

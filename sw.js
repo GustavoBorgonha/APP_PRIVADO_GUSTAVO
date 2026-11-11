@@ -1,5 +1,5 @@
 // Service worker: guarda os arquivos do app para funcionar offline.
-const CACHE = 'meu-controle-v15';
+const CACHE = 'meu-controle-v16';
 const ARQUIVOS = ['./', 'index.html', 'styles.css', 'panda.js', 'extrato.js', 'app.js', 'nuvem.js', 'firebase-config.js', 'manifest.webmanifest', 'icons/icon.svg', 'icons/icon-192.png', 'icons/icon-512.png', 'icons/panda.svg', 'fonts/outfit.woff2'];
 
 self.addEventListener('install', e => {

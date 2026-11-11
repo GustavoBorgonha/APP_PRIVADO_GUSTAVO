@@ -166,6 +166,26 @@ async function importacaoExtrato(navegador, url, erros) {
   l = await salvos();
   confere(l.length === 2 && l.some(x => x.valor === 45.9 && x.meio === 'credito' && x.banco === 'Inter'), 'compra do cartão fica marcada como crédito');
 
+  // Cancelar a importação inteira, no meio da triagem, apaga até o que já foi confirmado.
+  const antes = (await salvos()).length;
+  await importar('cancelar.csv', 'Data;Histórico;Valor\n07/03/2026;COMPRA A;-11,00\n08/03/2026;COMPRA B;-22,00\n09/03/2026;COMPRA C;-33,00', 'Nubank');
+  await cartao('COMPRA A').locator('[data-a=triConfirmar]').click();
+  await cartao('COMPRA B').locator('[data-a=triConfirmar]').click();
+  confere((await salvos()).length === antes + 2, 'antes de cancelar: 2 confirmados gravados');
+  await p.click('[data-a=cancelarImportacao]');
+  confere((await salvos()).length === antes && !(await p.isVisible('.tri-progresso')), 'cancelar importação apaga os já confirmados e sai da triagem');
+
+  // Cancelar depois, pela aba Dados.
+  await importar('depois.csv', 'Data;Histórico;Valor\n07/03/2026;COMPRA D;-44,00\n08/03/2026;COMPRA E;-55,00', 'Nubank');
+  await cartao('COMPRA D').locator('[data-a=triConfirmar]').click();
+  await cartao('COMPRA E').locator('[data-a=triConfirmar]').click();
+  await p.click('text=Concluir');
+  await p.click('.nav >> text=Dados');
+  confere(await p.isVisible('text=depois.csv'), 'aba Dados lista os extratos importados');
+  await p.locator('.mov', { hasText: 'depois.csv' }).locator('[data-a=desfazerLote]').click();
+  confere((await salvos()).length === antes && !(await p.isVisible('text=depois.csv')), 'cancelar importação antiga apaga todos os lançamentos dela');
+  await p.click('.nav >> text=Finanças');
+
   await importar('extrato.csv', CSV_TESTE, 'Bradesco');
   confere(await p.locator('.tri').count() === 2, 'CSV do banco: lê crédito e débito e ignora o resto');
   confere(await cartao('C/SAL').locator('[data-f=categoria]').inputValue() === 'Salário' && await cartao('C/SAL').locator('[data-f=tipo]').inputValue() === 'receita', 'CSV: crédito vira receita (salário)');

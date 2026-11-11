@@ -393,6 +393,7 @@ function vTriagem() {
         <h1 style="margin-top:10px">Triagem do extrato</h1>
         <p class="sub" style="margin:0"><span class="selo">${esc(t.banco)} · ${t.meio === 'credito' ? 'cartão de crédito' : 'conta (débito)'}</span>
           ${esc(t.arquivo)} · nada entra nas suas finanças sem você confirmar.</p></div>
+      <button class="btn perigo" data-a="cancelarImportacao">Cancelar importação</button>
     </div>
     <div class="card tri-progresso">
       <div class="linha" style="margin:0 0 8px"><strong>${feitos} de ${total} revisados</strong>
@@ -451,7 +452,7 @@ async function importarExtrato() {
         categorias: [...CATEGORIAS.despesa, ...CATEGORIAS.receita] });
     } catch (e) { console.error(e); }
     if (!itens.length) return alert('Não encontrei lançamentos neste arquivo. Use o extrato em OFX ou CSV baixado do seu banco.');
-    ui.triagem = { arquivo: arq.nome, ...opc, itens };
+    ui.triagem = { arquivo: arq.nome, ...opc, itens, lote: uid(), em: hoje() };
     ui.aba = 'financas'; ui.plano = null;
   });
 }
@@ -526,6 +527,32 @@ function vPlano(p) {
       <textarea rows="4" data-c="notas" data-p="${p.id}" placeholder="Ideias, links, contatos de fornecedores…">${esc(p.notas || '')}</textarea></div>`;
 }
 
+// Importações de extrato já feitas (agrupadas pelo "lote"), com opção de desfazer a importação inteira.
+function lotesImportados() {
+  const m = new Map();
+  db.lancamentos.filter(l => l.lote).forEach(l => {
+    const g = m.get(l.lote) || { id: l.lote, arquivo: l.loteArquivo || 'Extrato', em: l.loteEm || '', banco: l.banco, meio: l.meio, itens: [] };
+    g.itens.push(l); m.set(l.lote, g);
+  });
+  return [...m.values()].sort((a, b) => (b.em || '').localeCompare(a.em || ''));
+}
+
+function vImportacoes() {
+  const lotes = lotesImportados();
+  if (!lotes.length) return '';
+  return `<div class="card"><h2>Extratos importados</h2>
+    <p class="muted small" style="margin-top:-6px">Cancelar uma importação apaga todos os lançamentos que vieram daquele arquivo, mesmo os já confirmados.</p>
+    <div class="movs">${lotes.map(g => {
+      const datas = g.itens.map(l => l.data).sort();
+      return `<div class="mov tri-feito">
+        <span class="mov-ic">${g.meio === 'credito' ? '💳' : '🏦'}</span>
+        <span class="mov-txt"><strong>${esc(g.arquivo)}</strong>
+          <small>${esc(rotuloOrigem(g) || 'Extrato')} · ${g.itens.length} ${g.itens.length === 1 ? 'lançamento' : 'lançamentos'} · ${fmtData(datas[0])} a ${fmtData(datas[datas.length - 1])}${g.em ? ' · importado em ' + fmtData(g.em) : ''}</small></span>
+        <button class="btn mini perigo" data-a="desfazerLote" data-v="${g.id}">Cancelar importação</button></div>`;
+    }).join('')}</div>
+  </div>`;
+}
+
 function vDados() {
   return `
     <h1>Seus dados</h1>
@@ -535,6 +562,7 @@ function vDados() {
         <button class="btn" data-a="sair">Sair</button></div>`
       : `<p class="sub">Modo local: tudo fica salvo neste aparelho/navegador. Faça backups com frequência.</p>`}
     ${vSeuPanda()}
+    ${vImportacoes()}
     <div class="card"><h2>Backup</h2>
       <p class="muted">Use o backup para guardar uma cópia ou passar seus dados do computador para o celular (e vice-versa).</p>
       <div class="acoes"><button class="btn pri" data-a="exportarJSON">Baixar backup</button><button class="btn" data-a="importarJSON">Restaurar backup</button></div>
@@ -728,10 +756,28 @@ const acoes = {
     const igual = parecido(i);
     if (igual && !confirm(`Atenção: este valor parece já estar lançado.\n\nJá existe: ${descreveLanc(igual)}\n\nLançar mesmo assim? (vai ficar em dobro se for o mesmo movimento)`)) return;
     const l = { id: uid(), tipo: i.tipo, desc, categoria: String(i.categoria || '').trim() || 'Outros', valor, data: i.data, fixo: !!i.fixo,
-      origem: i.origem, banco: ui.triagem.banco, meio: ui.triagem.meio };
+      origem: i.origem, banco: ui.triagem.banco, meio: ui.triagem.meio,
+      lote: ui.triagem.lote, loteArquivo: ui.triagem.arquivo, loteEm: ui.triagem.em };
     db.lancamentos.push(l);
     Object.assign(i, { estado: 'ok', lancId: l.id, desc, valor, categoria: l.categoria });
     if (!ui.triagem.itens.some(x => x.estado === 'pendente')) reagir('feliz', 'Extrato em dia! 🎉', 'Triagem concluída! ✨');
+  },
+  cancelarImportacao: () => {
+    const t = ui.triagem; if (!t) return;
+    const n = db.lancamentos.filter(l => l.lote === t.lote).length;
+    const msg = n
+      ? `Cancelar a importação inteira?\n\n${n === 1 ? 'O lançamento já confirmado' : `Os ${n} lançamentos já confirmados`} deste extrato ${n === 1 ? 'será apagado' : 'serão apagados'} e nada mais será importado.`
+      : 'Cancelar a importação? Nada deste extrato será lançado.';
+    if (!confirm(msg)) return;
+    db.lancamentos = db.lancamentos.filter(l => l.lote !== t.lote);
+    ui.triagem = null;
+    if (n) reagir('triste', 'Importação cancelada… 🫥');
+  },
+  desfazerLote: v => {
+    const g = lotesImportados().find(x => x.id === v); if (!g) return;
+    if (!confirm(`Cancelar a importação de "${g.arquivo}"?\n\n${g.itens.length === 1 ? 'O lançamento que veio' : `Os ${g.itens.length} lançamentos que vieram`} deste extrato ${g.itens.length === 1 ? 'será apagado' : 'serão apagados'}, mesmo ${g.itens.length === 1 ? 'tendo sido confirmado' : 'os já confirmados'}. Não dá para desfazer.`)) return;
+    db.lancamentos = db.lancamentos.filter(l => l.lote !== v);
+    reagir('triste', 'Importação cancelada… 🫥');
   },
   triForcar: v => { const i = itemTriagem(v); if (i) Object.assign(i, { estado: 'pendente', forcar: true }); },
   triIgnorar: v => { const i = itemTriagem(v); if (i) i.estado = 'ignorado'; },
