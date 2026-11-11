@@ -32,6 +32,8 @@ PWA em JavaScript puro (sem framework, sem build) para finanças pessoais e plan
   nome, tipo (despesa/receita/ambos) e ícone (emoji da lista, emoji próprio ou imagem reduzida a 96px).
   Use `listaCategorias()`, `nomesCats(tipo)`, `iconeCat(nome, tipo)` (devolve HTML) e `opcoesCats()`.
   Renomear atualiza os lançamentos; excluir passa os lançamentos para "Outros".
+  Escolha de categoria é feita pelo seletor próprio `seletorCat()` (botão + lista com ícones, em ordem
+  alfabética e com busca; valor num input hidden que dispara "change"), não por <select>.
   A janela também tem "Mover lançamentos" (`moverLancs`): leva todos os lançamentos daquela categoria
   (cadastrada ou solta) para outra; os de tipo incompatível com o destino ficam onde estão.
 - Categoria "Transferência entre contas" (`TRANSF`): aparece no extrato, mas fica fora de receitas,
@@ -64,6 +66,9 @@ PWA em JavaScript puro (sem framework, sem build) para finanças pessoais e plan
 
 - Rode `node tests/smoke.js` antes de cada commit (precisa de `playwright` instalado).
 - Commits em português, direto na `main` (o site atualiza em ~1 minuto).
+- **Créditos do Netlify (plano grátis: 300/mês, cada publicação gasta ~15):** cada push na `main` é uma
+  publicação. Agrupe as mudanças e, em commits intermediários, coloque `[skip netlify]` na mensagem
+  para não publicar. Se os créditos acabarem, o site fica fora do ar até o ciclo seguinte.
 - Manter sem dependências e sem etapa de build.
 - O Gustavo não é programador experiente: explique os passos de configuração de forma simples.
 - Guia de configuração (Firebase, Netlify): `CONFIGURAR.md`.

@@ -25,18 +25,29 @@ const CATS_PADRAO = [
 const CATS_FIXAS = [TRANSF, 'Outros'];   // não podem ser renomeadas nem excluídas (o app depende delas)
 const semAcentoApp = s => String(s ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
 const idPadrao = nome => 'padrao-' + semAcentoApp(nome).replace(/[^a-z0-9]+/g, '-');
+const ordemAlfa = (a, b) => a.localeCompare(b, 'pt-BR', { sensitivity: 'base' });
+// A lista é montada uma vez e reaproveitada até as categorias mudarem (salvar() invalida).
+let cacheCats = null, versaoCats = 0;
 function listaCategorias() {
+  if (cacheCats && cacheCats.ref === db.categorias && cacheCats.v === versaoCats) return cacheCats.lista;
   const extra = new Map((db.categorias || []).map(c => [c.id, c]));
   const lista = CATS_PADRAO.map(([tipo, nome, emoji]) => {
     const id = idPadrao(nome);
     return { id, nome, tipo, emoji, padrao: true, ...(extra.get(id) || {}) };
   });
   (db.categorias || []).forEach(c => { if (!c.id.startsWith('padrao-')) lista.push(c); });
-  return lista.filter(c => !c.excluida);
+  const final = lista.filter(c => !c.excluida).sort((a, b) => ordemAlfa(a.nome, b.nome));
+  const porNome = new Map();
+  final.forEach(c => { if (!porNome.has(c.nome)) porNome.set(c.nome, []); porNome.get(c.nome).push(c); });
+  cacheCats = { ref: db.categorias, v: versaoCats, lista: final, porNome };
+  return final;
 }
 const serveTipo = (c, tipo) => c.tipo === tipo || c.tipo === 'ambos';
 const nomesCats = tipo => listaCategorias().filter(c => serveTipo(c, tipo)).map(c => c.nome);
-const catPorNome = (nome, tipo) => { const l = listaCategorias(); return l.find(c => c.nome === nome && serveTipo(c, tipo)) || l.find(c => c.nome === nome); };
+const catPorNome = (nome, tipo) => {
+  listaCategorias(); const l = cacheCats.porNome.get(nome); if (!l) return undefined;
+  return l.find(c => serveTipo(c, tipo)) || l[0];
+};
 const ehTransf = l => l.categoria === TRANSF;
 const contaNoSaldo = l => !ehTransf(l);
 
@@ -143,6 +154,7 @@ function carregar() {
   return vazio();
 }
 function salvar() {
+  versaoCats++;
   if (App.modo === 'nuvem') {
     App.sincronizar?.(db);
     // Se a nuvem ainda não aceita categorias (regras antigas), elas ficam salvas neste aparelho.
@@ -243,6 +255,7 @@ const lancMes = m => db.lancamentos.filter(l => l.data.startsWith(m));
 
 /* ---------- renderização ---------- */
 function render() {
+  fecharSeletor();
   App.renderPendente = false;
   if (ui.triagem && !ui.triagem.itens) ui.triagem = null;
   if (!ui.triagem) ui.naTriagem = false;
@@ -452,7 +465,7 @@ function cartaoTriagem(i) {
     ${i.avisos.map(a => `<p class="tri-aviso">⚠️ ${esc(a)}</p>`).join('')}
     <div class="tri-campos">
       <label class="larga">Descrição<input ${campo('desc')} value="${esc(i.desc)}"></label>
-      <label>Categoria<select ${campo('categoria')}>${opcoesCats(i.tipo, i.categoria)}</select></label>
+      <label>Categoria${seletorCat(campo('categoria'), 'tipo:' + i.tipo, i.categoria || 'Outros')}</label>
       <label>Tipo<select ${campo('tipo')}>
         <option value="despesa" ${i.tipo === 'despesa' ? 'selected' : ''}>Despesa</option>
         <option value="receita" ${i.tipo === 'receita' ? 'selected' : ''}>Receita</option></select></label>
@@ -495,7 +508,9 @@ function vTriagem() {
         <span class="muted">${ok.length} ${ok.length === 1 ? 'confirmado' : 'confirmados'} · ${ign.length} ${ign.length === 1 ? 'ignorado' : 'ignorados'}${dup.length ? ` · ${dup.length} já ${dup.length === 1 ? 'importado' : 'importados'}` : ''}</span></div>
       <div class="barra"><i style="width:${total ? feitos / total * 100 : 0}%"></i></div>
     </div>
-    ${pend.length ? `<div class="tri-lista">${pend.map(cartaoTriagem).join('')}</div>`
+    ${pend.length ? `<div class="tri-lista">${pend.slice(0, ui.triMostrar || 10).map(cartaoTriagem).join('')}</div>
+      ${pend.length > (ui.triMostrar || 10) ? `<div class="acoes" style="justify-content:center;margin:-2px 0 16px">
+        <button class="btn" data-a="triMais">Mostrar mais (${pend.length - (ui.triMostrar || 10)} restantes)</button></div>` : ''}`
       : `<div class="card vazio">${panda('feliz')}<strong style="color:var(--text);font-size:17px">Tudo revisado!</strong><br>
           ${ok.length} ${ok.length === 1 ? 'lançamento confirmado' : 'lançamentos confirmados'} e ${ign.length} ${ign.length === 1 ? 'ignorado' : 'ignorados'}.
           <div class="acoes" style="justify-content:center;margin-top:14px"><button class="btn pri" data-a="sairTriagem">Concluir</button></div></div>`}
@@ -755,6 +770,7 @@ function vSeuPanda() {
 const modal = $('#modal');
 let aoSalvarModal = null;
 function abrirModal(html, aoSalvar) {
+  fecharSeletor();
   $('#modal-body').innerHTML = html;
   aoSalvarModal = aoSalvar;
   modal.showModal();
@@ -764,13 +780,119 @@ function fecharModal() { modal.close(); aoSalvarModal = null; }
 modal.addEventListener('click', e => { if (e.target === modal) fecharModal(); });
 
 /* ---------- categorias: seleção, tela e cadastro ---------- */
-// <option>s de categoria para um tipo; mantém a atual mesmo que não esteja cadastrada.
-function opcoesCats(tipo, atual) {
-  const nomes = nomesCats(tipo);
-  if (atual && !nomes.includes(atual)) nomes.unshift(atual);
-  if (!atual) atual = 'Outros';
-  return nomes.map(n => { const c = catPorNome(n, tipo); return `<option value="${esc(n)}" ${n === atual ? 'selected' : ''}>${c && c.emoji && !c.img ? c.emoji + ' ' : ''}${esc(n)}</option>`; }).join('');
+/* Seletor de categoria: no lugar do <select> nativo (que não dá para deixar bonito), um botão que abre
+   uma lista com ícones, em ordem alfabética e com busca. O valor fica num <input type="hidden">, que
+   dispara "change" ao escolher — então o resto do app trata igual a um campo comum.
+   fonte: "tipo:despesa" | "tipo:receita" (categorias do tipo) ou "mover:<nome>" (todas menos essa). */
+function seletorCat(attrs, fonte, valor, vazio = 'Escolha a categoria') {
+  const tipo = fonte.startsWith('tipo:') ? fonte.slice(5) : '';
+  return `<div class="seletor" data-fonte="${esc(fonte)}" data-vazio="${esc(vazio)}">
+    <input type="hidden" ${attrs} value="${esc(valor || '')}">
+    <button type="button" class="seletor-btn" data-a="abrirSeletor" aria-haspopup="listbox">${conteudoSeletor(valor, tipo, vazio)}</button>
+  </div>`;
 }
+function conteudoSeletor(valor, tipo, vazio) {
+  return valor
+    ? `<span class="seletor-ic">${iconeCat(valor, tipo || 'despesa')}</span><span class="seletor-txt">${esc(valor)}</span>${IC.seta}`
+    : `<span class="seletor-ic vazio">🏷️</span><span class="seletor-txt muted">${esc(vazio)}</span>${IC.seta}`;
+}
+
+let seletorAtivo = null;   // { el: .seletor, painel }
+function fecharSeletor() {
+  if (!seletorAtivo) return;
+  const { painel, el } = seletorAtivo; seletorAtivo = null;
+  try { painel.hidePopover?.(); } catch (e) { /* já fechado */ }
+  painel.remove();
+  el.querySelector('.seletor-btn')?.setAttribute('aria-expanded', 'false');
+}
+function abrirSeletor(el) {
+  if (seletorAtivo && seletorAtivo.el === el) return fecharSeletor();
+  fecharSeletor();
+  const fonte = el.dataset.fonte, atual = el.querySelector('input').value;
+  let grupos;
+  if (fonte.startsWith('tipo:')) {
+    const tipo = fonte.slice(5), nomes = nomesCats(tipo);
+    if (atual && !nomes.includes(atual)) nomes.unshift(atual);
+    grupos = [['', nomes.map(n => ({ nome: n, ic: iconeCat(n, tipo) }))]];
+  } else {
+    const origem = fonte.slice(6), destinos = listaCategorias().filter(x => x.nome !== origem);
+    grupos = [['despesa', 'Despesas'], ['receita', 'Receitas'], ['ambos', 'Servem para as duas']]
+      .map(([t, rot]) => [rot, destinos.filter(x => x.tipo === t).map(x => ({ nome: x.nome, ic: iconeCat(x.nome, t === 'ambos' ? 'despesa' : t) }))])
+      .filter(([, l]) => l.length);
+  }
+  const painel = document.createElement('div');
+  painel.className = 'seletor-painel';
+  painel.setAttribute('popover', 'manual');
+  painel.innerHTML = `
+    <div class="seletor-busca"><input type="search" placeholder="Buscar categoria" aria-label="Buscar categoria" autocomplete="off"></div>
+    <div class="seletor-lista" role="listbox">${grupos.map(([rot, l]) => (rot ? `<div class="seletor-grupo">${rot}</div>` : '') +
+      l.map(o => `<button type="button" class="seletor-op ${o.nome === atual ? 'on' : ''}" role="option" aria-selected="${o.nome === atual}"
+        data-a="escolherOpcao" data-v="${esc(o.nome)}" data-busca="${esc(semAcentoApp(o.nome))}">
+        <span class="seletor-ic">${o.ic}</span><span class="seletor-txt">${esc(o.nome)}</span><span class="seletor-ok">✓</span></button>`).join('')).join('')}
+      <p class="seletor-nada muted small" hidden>Nenhuma categoria com esse nome.</p></div>
+    ${fonte.startsWith('tipo:') ? `<button type="button" class="seletor-gerenciar" data-a="irCategorias">🏷️ Criar ou editar categorias</button>` : ''}`;
+  // Na frente de tudo (inclusive das janelas): top layer do navegador quando disponível.
+  // Dentro de uma janela aberta, o painel precisa ficar dentro dela (o resto da página fica bloqueado).
+  (el.closest('dialog') || document.body).appendChild(painel);
+  try { painel.showPopover?.(); } catch (e) { /* sem suporte */ }
+  seletorAtivo = { el, painel };
+  el.querySelector('.seletor-btn').setAttribute('aria-expanded', 'true');
+  posicionarSeletor();
+  const busca = painel.querySelector('input');
+  busca.addEventListener('input', () => {
+    const q = semAcentoApp(busca.value); let algum = false;
+    painel.querySelectorAll('.seletor-op').forEach(b => { const v = !q || b.dataset.busca.includes(q); b.hidden = !v; algum = algum || v; });
+    painel.querySelectorAll('.seletor-grupo').forEach(g => { let n = g.nextElementSibling, v = false; while (n && n.classList.contains('seletor-op')) { v = v || !n.hidden; n = n.nextElementSibling; } g.hidden = !v; });
+    painel.querySelector('.seletor-nada').hidden = algum;
+  });
+  busca.addEventListener('keydown', e => {
+    if (e.key === 'Enter') { e.preventDefault(); painel.querySelector('.seletor-op:not([hidden])')?.click(); }
+    if (e.key === 'ArrowDown') { e.preventDefault(); painel.querySelector('.seletor-op:not([hidden])')?.focus(); }
+  });
+  painel.addEventListener('keydown', e => {
+    if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return;
+    const ops = [...painel.querySelectorAll('.seletor-op:not([hidden])')], i = ops.indexOf(document.activeElement);
+    if (i < 0) return; e.preventDefault();
+    (ops[i + (e.key === 'ArrowDown' ? 1 : -1)] || (e.key === 'ArrowUp' ? busca : ops[i])).focus();
+  });
+  // Mostra a categoria atual no meio da lista (rolando só a lista, nunca a página).
+  const marcado = painel.querySelector('.seletor-op.on'), lista = painel.querySelector('.seletor-lista');
+  if (marcado) lista.scrollTop = marcado.offsetTop - lista.clientHeight / 2 + marcado.offsetHeight / 2;
+  if (matchMedia('(hover: hover)').matches) busca.focus({ preventScroll: true });   // no celular não abre o teclado sozinho
+}
+// Computador: abre colado ao campo (para cima se não couber). Celular: sobe de baixo, como folha.
+function posicionarSeletor() {
+  if (!seletorAtivo) return;
+  const { el, painel } = seletorAtivo, st = painel.style;
+  if (innerWidth <= 600) { painel.classList.add('folha'); st.left = st.top = st.width = ''; return; }
+  const r = el.querySelector('.seletor-btn').getBoundingClientRect();
+  const largura = Math.max(r.width, 280), alturaMax = 360;
+  const embaixo = innerHeight - r.bottom - 12, emcima = r.top - 12;
+  st.width = largura + 'px';
+  st.left = Math.min(Math.max(8, r.left), innerWidth - largura - 8) + 'px';
+  if (embaixo >= Math.min(alturaMax, 240) || embaixo >= emcima) { st.top = (r.bottom + 6) + 'px'; st.bottom = 'auto'; st.maxHeight = Math.min(alturaMax, embaixo) + 'px'; }
+  else { st.top = 'auto'; st.bottom = (innerHeight - r.top + 6) + 'px'; st.maxHeight = Math.min(alturaMax, emcima) + 'px'; }
+}
+function escolherOpcao(valor) {
+  if (!seletorAtivo) return;
+  const { el } = seletorAtivo, inp = el.querySelector('input');
+  fecharSeletor();
+  const fonte = el.dataset.fonte, tipo = fonte.startsWith('tipo:') ? fonte.slice(5) : '';
+  el.querySelector('.seletor-btn').innerHTML = conteudoSeletor(valor, tipo, el.dataset.vazio);
+  if (inp.value !== valor) { inp.value = valor; inp.dispatchEvent(new Event('change', { bubbles: true })); }
+  el.querySelector('.seletor-btn').focus({ preventScroll: true });
+}
+document.addEventListener('pointerdown', e => {
+  if (seletorAtivo && !seletorAtivo.painel.contains(e.target) && !seletorAtivo.el.contains(e.target)) fecharSeletor();
+}, true);
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && seletorAtivo) { e.preventDefault(); e.stopPropagation(); const b = seletorAtivo.el.querySelector('.seletor-btn'); fecharSeletor(); b.focus(); } }, true);
+addEventListener('resize', () => posicionarSeletor());
+// Rolou a página ou a janela com a lista aberta: a lista acompanha o campo.
+let seletorQuadro = 0;
+document.addEventListener('scroll', e => {
+  if (!seletorAtivo || seletorAtivo.painel.contains(e.target) || seletorQuadro) return;
+  seletorQuadro = requestAnimationFrame(() => { seletorQuadro = 0; posicionarSeletor(); });
+}, true);
 
 function vCategorias() {
   const lista = listaCategorias();
@@ -820,11 +942,7 @@ function modalCategoria(c, nomeInicial) {
   const destinos = listaCategorias().filter(x => x.nome !== origem);
   const mover = usados ? `<div class="full mover"><span class="rotulo">Mover lançamentos</span>
       <p class="muted small" style="margin:0 0 8px">${usados === 1 ? '1 lançamento usa' : `${usados} lançamentos usam`} "${esc(origem)}". Mande ${usados === 1 ? 'ele' : 'todos'} para outra categoria de uma vez:</p>
-      <div class="mover-linha"><select id="mover-para" aria-label="Categoria de destino">
-        ${[['despesa', 'Despesas'], ['receita', 'Receitas'], ['ambos', 'Servem para as duas']].map(([t, rot]) => {
-          const g = destinos.filter(x => x.tipo === t);
-          return g.length ? `<optgroup label="${rot}">${g.map(x => `<option value="${esc(x.nome)}">${x.emoji && !x.img ? x.emoji + ' ' : ''}${esc(x.nome)}</option>`).join('')}</optgroup>` : '';
-        }).join('')}</select>
+      <div class="mover-linha">${seletorCat('id="mover-para" aria-label="Categoria de destino"', 'mover:' + origem, '', 'Escolha o destino')}
         <button type="button" class="btn" data-a="moverLancs" data-v="${esc(origem)}">Mover ${usados === 1 ? '' : 'os ' + usados}</button></div>
     </div>` : '';
   const tipoOp = (v, rot) => `<label class="escolha"><input type="radio" name="tipo" value="${v}" ${c.tipo === v ? 'checked' : ''} ${fixa ? 'disabled' : ''}><span><b>${rot}</b></span></label>`;
@@ -917,7 +1035,7 @@ function modalLanc(l, tipoInicial) {
         <option value="receita" ${l.tipo === 'receita' ? 'selected' : ''}>Receita</option></select></label>
       <label>Valor (R$)<input name="valor" type="number" step="0.01" min="0" required value="${l.valor}"></label>
       <label class="full">Descrição<input name="desc" required value="${esc(l.desc)}" placeholder="Ex.: Aluguel, mercado, salário"></label>
-      <label>Categoria<select name="categoria" id="lanc-cat"></select>
+      <label>Categoria<span id="lanc-cat-caixa">${seletorCat('name="categoria" id="lanc-cat"', 'tipo:' + l.tipo, l.categoria || 'Outros')}</span>
         <button type="button" class="link mini-link" data-a="irCategorias">Criar ou editar categorias</button></label>
       <label>Data<input name="data" type="date" required value="${l.data}"></label>
       <label class="full" style="display:flex;gap:8px;align-items:center"><input type="checkbox" name="fixo" ${l.fixo ? 'checked' : ''} style="margin:0"> Lançamento fixo (repete todo mês)</label>
@@ -930,8 +1048,8 @@ function modalLanc(l, tipoInicial) {
     else if (novo && dados.valor >= 1000) reagir('bravo', 'Eita! Que gastão! 😤', 'Mil reais?! Hmpf! 😤');
     else if (novo) reagir('triste', 'Lá se vai o dinheirinho… 😢', 'Mais uma despesa… 🥲');
   });
-  const preencherCats = () => { const atual = $('#lanc-cat').value || l.categoria; $('#lanc-cat').innerHTML = opcoesCats($('#lanc-tipo').value, atual); };
-  $('#lanc-tipo').onchange = preencherCats; preencherCats();
+  // Trocar o tipo troca a lista de categorias do seletor (mantém a escolhida).
+  $('#lanc-tipo').onchange = () => { $('#lanc-cat-caixa').innerHTML = seletorCat('name="categoria" id="lanc-cat"', 'tipo:' + $('#lanc-tipo').value, $('#lanc-cat').value); };
 }
 
 function modalPlano(p, tipoInicial) {
@@ -1061,6 +1179,7 @@ const acoes = {
     db.lancamentos = db.lancamentos.filter(l => l.lote !== v);
     reagir('triste', 'Importação cancelada… 🫥');
   },
+  triMais: () => { ui.triMostrar = (ui.triMostrar || 10) + 10; },
   triForcar: v => { const i = itemTriagem(v); if (i) Object.assign(i, { estado: 'pendente', forcar: true }); },
   triIgnorar: v => { const i = itemTriagem(v); if (i) i.estado = 'ignorado'; },
   triDesfazer: v => {
@@ -1078,14 +1197,17 @@ const acoes = {
     ui.naTriagem = false;
     if (!t.itens.some(i => i.estado === 'pendente')) ui.triagem = null;
   },
+  abrirSeletor: (v, el) => { abrirSeletor(el.closest('.seletor')); return Promise.resolve(); },
+  escolherOpcao: v => { escolherOpcao(v); return Promise.resolve(); },
   novaCat: () => modalCategoria(),
   cadastrarCat: v => modalCategoria(null, v),
   editarCat: v => { const c = listaCategorias().find(x => x.id === v); if (c) modalCategoria(c); },
-  irCategorias: () => { fecharModal(); ui.aba = 'categorias'; ui.plano = null; ui.naTriagem = false; },
+  irCategorias: () => { fecharSeletor(); fecharModal(); ui.aba = 'categorias'; ui.plano = null; ui.naTriagem = false; },
   escolherEmoji: v => { const f = $('#modal-body form'); if (!f) return; f.emoji.value = v; f.img.value = ''; f.emojiProprio.value = ''; previaCat(); },
   imagemCat: () => imagemParaIcone().then(dado => { const f = $('#modal-body form'); if (dado && f) { f.img.value = dado; previaCat(); } }),
   moverLancs: origem => {
-    const destino = $('#mover-para')?.value; if (!destino || destino === origem) return;
+    const destino = $('#mover-para')?.value; if (!destino) return alert('Escolha para qual categoria mover.');
+    if (destino === origem) return;
     const cat = catPorNome(destino);
     const todos = db.lancamentos.filter(l => l.categoria === origem);
     const cabem = todos.filter(l => !cat || serveTipo(cat, l.tipo)), ficam = todos.length - cabem.length;
@@ -1231,7 +1353,7 @@ App.carregando = () => {
 };
 // Triagem vinda da nuvem (de qualquer aparelho).
 // Categorias vindas da nuvem.
-App.receberCategorias = docs => { db.categorias = docs; if (App.modo === 'nuvem') renderSeguro(); };
+App.receberCategorias = docs => { db.categorias = docs; versaoCats++; if (App.modo === 'nuvem') renderSeguro(); };
 App.semCategoriasNaNuvem = e => {
   console.error(e);
   if (App.categoriasSemNuvem) return;

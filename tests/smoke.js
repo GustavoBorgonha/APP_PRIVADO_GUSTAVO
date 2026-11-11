@@ -49,6 +49,12 @@ const FIREBASE_FALSO = {
       commit: async () => { ops.forEach(o => o()); setTimeout(() => { emit('lancamentos'); emit('planos'); emit('categorias'); }, 0); } }; };`,
 };
 
+// Escolhe uma categoria no seletor (botão que abre a lista com ícones).
+async function escolher(p, alvo, nome) {
+  await p.locator(alvo).locator('xpath=..').locator('.seletor-btn').click();
+  await p.locator(`.seletor-painel .seletor-op[data-v="${nome}"]`).click();
+}
+
 function confere(cond, msg) {
   if (!cond) throw new Error('FALHOU: ' + msg);
   console.log('  ok —', msg);
@@ -70,7 +76,7 @@ async function modoLocal(navegador, url, erros) {
   await p.click('dialog >> text=Salvar');
   confere(await p.isVisible('.hero .balao.on') && await p.isVisible('.hero .panda-svg.h-feliz'), 'panda fica feliz com a receita');
   await p.click('.atalho >> text=Despesa');
-  await p.fill('[name=valor]', '2500'); await p.fill('[name=desc]', 'Aluguel'); await p.selectOption('#lanc-cat', 'Moradia');
+  await p.fill('[name=valor]', '2500'); await p.fill('[name=desc]', 'Aluguel'); await escolher(p, '#lanc-cat', 'Moradia');
   await p.click('dialog >> text=Salvar');
   await p.click('.nav >> text=Início');
   const saldo = await p.textContent('.hero .saldo-val');
@@ -78,7 +84,7 @@ async function modoLocal(navegador, url, erros) {
 
   // Transferência entre contas aparece no extrato, mas não mexe no saldo.
   await p.click('.atalho >> text=Despesa');
-  await p.fill('[name=valor]', '1000'); await p.fill('[name=desc]', 'Pix para a outra conta'); await p.selectOption('#lanc-cat', 'Transferência entre contas');
+  await p.fill('[name=valor]', '1000'); await p.fill('[name=desc]', 'Pix para a outra conta'); await escolher(p, '#lanc-cat', 'Transferência entre contas');
   await p.click('dialog >> text=Salvar');
   await p.click('.nav >> text=Início');
   confere((await p.textContent('.hero .saldo-val')).replace(/\s/g, ' ').includes('5.500,00'), 'transferência entre contas não altera o saldo');
@@ -97,7 +103,7 @@ async function modoLocal(navegador, url, erros) {
   confere(await p.isVisible('.cat-card:has-text("Pets")'), 'categoria nova aparece na tela de categorias');
   await p.click('.nav >> text=Finanças');
   await p.click('text=+ Lançamento');
-  await p.fill('[name=valor]', '80'); await p.fill('[name=desc]', 'Ração'); await p.selectOption('#lanc-cat', 'Pets');
+  await p.fill('[name=valor]', '80'); await p.fill('[name=desc]', 'Ração'); await escolher(p, '#lanc-cat', 'Pets');
   await p.click('dialog >> text=Salvar');
   confere((await p.textContent('.mov:has-text("Ração") .mov-ic')).includes('🐶'), 'lançamento usa a categoria nova, com o ícone');
   await p.click('.nav >> text=Finanças'); await p.click('text=🏷️ Categorias');
@@ -123,7 +129,7 @@ async function modoLocal(navegador, url, erros) {
   await p.reload();
   await p.click('.nav >> text=Finanças'); await p.click('text=🏷️ Categorias');
   await p.click('.cat-card.solta:has-text("fat")');
-  await p.selectOption('#mover-para', 'Cartão de crédito');
+  await escolher(p, '#mover-para', 'Cartão de crédito');
   await p.click('dialog [data-a=moverLancs]');
   const movidos = await p.evaluate(() => JSON.parse(localStorage.getItem('apg-dados-v1')).lancamentos.filter(l => l.id.startsWith('velho')).map(l => l.categoria));
   confere(movidos.length === 2 && movidos.every(c => c === 'Cartão de crédito') && !(await p.isVisible('.cat-card.solta:has-text("fat")')),

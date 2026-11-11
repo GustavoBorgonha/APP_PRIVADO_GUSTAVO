@@ -72,17 +72,24 @@ async function iniciar() {
     const recebido = {};
     let negado = false;
     App.triagemSemNuvem = null; App.categoriasSemNuvem = null;
+    let catRecebidas = false;
     escutas.push(F.onSnapshot(F.collection(fs, 'categorias'), snap => {
       const docs = snap.docs.map(d => ({ ...d.data(), id: d.id }));
-      enviado.categorias = new Map(docs.map(x => [x.id, estavel(x)]));
-      App.receberCategorias(docs);
+      const novo = new Map(docs.map(x => [x.id, estavel(x)]));
+      const eco = catRecebidas && novo.size === enviado.categorias.size && [...novo].every(([id, j]) => enviado.categorias.get(id) === j);
+      enviado.categorias = novo; catRecebidas = true;
+      if (!eco) App.receberCategorias(docs);
     }, e => App.semCategoriasNaNuvem(e)));
     escutas.push(F.onSnapshot(refTriagem, snap => App.receberTriagem(snap.exists() ? snap.data().dados : null),
       e => App.semTriagemNaNuvem(e)));
     COLECOES.forEach(c => escutas.push(F.onSnapshot(F.collection(fs, c), snap => {
       const docs = snap.docs.map(d => ({ ...d.data(), id: d.id }));
-      enviado[c] = new Map(docs.map(x => [x.id, estavel(x)]));
+      const novo = new Map(docs.map(x => [x.id, estavel(x)]));
+      // Eco do que este aparelho acabou de gravar: a tela já está certa, não precisa redesenhar.
+      const eco = recebido[c] && novo.size === enviado[c].size && [...novo].every(([id, j]) => enviado[c].get(id) === j);
+      enviado[c] = novo;
       recebido[c] = true;
+      if (eco) return;
       App.receber(c, docs, COLECOES.every(k => recebido[k]));
     }, e => {
       console.error(e);
