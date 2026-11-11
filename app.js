@@ -147,6 +147,8 @@ const ICONE_CAT = {
   'Cuidados pessoais': '💈', 'Cartão de crédito': '💳', 'Tarifas bancárias': '🏦',
   'Salário': '💼', 'Renda extra': '✨', 'Rendimentos': '📈', 'Reembolso': '↩️',
 };
+const MEIOS = { debito: 'débito', credito: 'crédito' };
+const rotuloOrigem = x => x.banco || x.meio ? [x.banco, MEIOS[x.meio]].filter(Boolean).join(' ') : '';
 const iconeCat = (cat, tipo) => ICONE_CAT[cat] || (tipo === 'receita' ? '💵' : '🧾');
 const DIAS = ['domingo', 'segunda', 'terça', 'quarta', 'quinta', 'sexta', 'sábado'];
 function rotuloDia(d) {
@@ -219,7 +221,7 @@ function itemExtrato(x, opc = {}) {
   return `<div class="mov" data-a="editarLanc" data-v="${x.id}" role="button" tabindex="0" title="Editar">
     <span class="mov-ic ${x.tipo}">${iconeCat(x.categoria, x.tipo)}</span>
     <span class="mov-txt"><strong>${esc(x.desc)}${x.fixo ? ' <span class="fixo" title="Lançamento fixo">🔁</span>' : ''}</strong>
-      <small>${esc(x.categoria)}${opc.data ? ' · ' + fmtData(x.data).slice(0, 5) : ''}</small></span>
+      <small>${esc(x.categoria)}${opc.data ? ' · ' + fmtData(x.data).slice(0, 5) : ''}${rotuloOrigem(x) ? ' · ' + esc(rotuloOrigem(x)) : ''}</small></span>
     <span class="mov-val ${x.tipo === 'receita' ? 'pos' : ''}">${x.tipo === 'receita' ? '+' : '−'} ${din(x.valor)}</span>
     ${opc.apagar ? `<button class="x" data-a="apagarLanc" data-v="${x.id}" title="Apagar" aria-label="Apagar lançamento">✕</button>` : ''}
   </div>`;
@@ -350,6 +352,8 @@ function cartaoTriagem(i) {
       <div class="tri-orig"><small>No extrato · ${fmtData(i.data)}</small><span>${esc(i.bruto)}</span></div>
       <strong class="tri-valor ${i.tipo === 'receita' ? 'pos' : ''}">${i.tipo === 'receita' ? '+' : '−'} ${din(i.valor)}</strong>
     </div>
+    ${i.forcar ? '<p class="tri-aviso forte">⚠️ Este movimento já foi importado antes. Confirmar vai lançar de novo.</p>' : ''}
+    ${parecido(i) && !i.forcar ? `<p class="tri-aviso forte">⚠️ Este valor já está lançado: ${esc(descreveLanc(parecido(i)))}. Confira antes de confirmar.</p>` : ''}
     ${i.avisos.map(a => `<p class="tri-aviso">⚠️ ${esc(a)}</p>`).join('')}
     <div class="tri-campos">
       <label class="larga">Descrição<input ${campo('desc')} value="${esc(i.desc)}"></label>
@@ -368,8 +372,18 @@ function cartaoTriagem(i) {
   </div>`;
 }
 
+// Procura nas finanças um lançamento que pareça ser o mesmo movimento:
+// mesmo identificador do banco, ou mesma data + mesmo valor + mesmo tipo.
+function parecido(i) {
+  const valor = Math.abs(parseValor(i.valor));
+  return db.lancamentos.find(l => l.id !== i.lancId && ((l.origem && l.origem === i.origem) ||
+    (l.data === i.data && l.tipo === i.tipo && Math.abs(l.valor - valor) < 0.005)));
+}
+const descreveLanc = l => `"${l.desc}" em ${fmtData(l.data)}, ${brl(l.valor)}${rotuloOrigem(l) ? ' (' + rotuloOrigem(l) + ')' : ''}`;
+
 function vTriagem() {
   const t = ui.triagem, total = t.itens.length;
+  const dup = t.itens.filter(i => i.estado === 'duplicado');
   const pend = t.itens.filter(i => i.estado === 'pendente');
   const ok = t.itens.filter(i => i.estado === 'ok'), ign = t.itens.filter(i => i.estado === 'ignorado');
   const feitos = total - pend.length;
@@ -377,11 +391,12 @@ function vTriagem() {
     <div class="topo">
       <div><button class="btn mini voltar" data-a="sairTriagem">${IC.voltar} Finanças</button>
         <h1 style="margin-top:10px">Triagem do extrato</h1>
-        <p class="sub" style="margin:0">${esc(t.arquivo)} · nada entra nas suas finanças sem você confirmar.</p></div>
+        <p class="sub" style="margin:0"><span class="selo">${esc(t.banco)} · ${t.meio === 'credito' ? 'cartão de crédito' : 'conta (débito)'}</span>
+          ${esc(t.arquivo)} · nada entra nas suas finanças sem você confirmar.</p></div>
     </div>
     <div class="card tri-progresso">
       <div class="linha" style="margin:0 0 8px"><strong>${feitos} de ${total} revisados</strong>
-        <span class="muted">${ok.length} ${ok.length === 1 ? 'confirmado' : 'confirmados'} · ${ign.length} ${ign.length === 1 ? 'ignorado' : 'ignorados'}</span></div>
+        <span class="muted">${ok.length} ${ok.length === 1 ? 'confirmado' : 'confirmados'} · ${ign.length} ${ign.length === 1 ? 'ignorado' : 'ignorados'}${dup.length ? ` · ${dup.length} já ${dup.length === 1 ? 'importado' : 'importados'}` : ''}</span></div>
       <div class="barra"><i style="width:${total ? feitos / total * 100 : 0}%"></i></div>
     </div>
     ${['despesa', 'receita'].map(tp => `<datalist id="cats-${tp}">${CATEGORIAS[tp].map(c => `<option value="${c}">`).join('')}</datalist>`).join('')}
@@ -389,7 +404,15 @@ function vTriagem() {
       : `<div class="card vazio">${panda('feliz')}<strong style="color:var(--text);font-size:17px">Tudo revisado!</strong><br>
           ${ok.length} ${ok.length === 1 ? 'lançamento confirmado' : 'lançamentos confirmados'} e ${ign.length} ${ign.length === 1 ? 'ignorado' : 'ignorados'}.
           <div class="acoes" style="justify-content:center;margin-top:14px"><button class="btn pri" data-a="sairTriagem">Concluir</button></div></div>`}
-    ${feitos ? `<details class="card tri-feitos" ${pend.length ? '' : 'open'}><summary>Já revisados (${feitos})</summary>
+    ${dup.length ? `<details class="card tri-feitos tri-dups"><summary>Já importados antes — ficaram de fora (${dup.length})</summary>
+      <p class="muted small" style="margin:0 0 6px">Estes movimentos já estão nas suas finanças, então não entram de novo.</p>
+      ${dup.map(i => `<div class="mov tri-feito">
+        <span class="mov-ic ${i.tipo}">✅</span>
+        <span class="mov-txt"><strong>${esc(i.desc)}</strong><small>${fmtData(i.data)} · já lançado</small></span>
+        <span class="mov-val ${i.tipo === 'receita' ? 'pos' : ''}">${i.tipo === 'receita' ? '+' : '−'} ${din(i.valor)}</span>
+        <button class="btn mini" data-a="triForcar" data-v="${i.id}">Lançar mesmo assim</button></div>`).join('')}
+    </details>` : ''}
+    ${ok.length + ign.length ? `<details class="card tri-feitos tri-revisados" ${pend.length ? '' : 'open'}><summary>Já revisados (${ok.length + ign.length})</summary>
       ${[...ok, ...ign].map(i => `<div class="mov tri-feito ${i.estado}">
         <span class="mov-ic ${i.tipo}">${i.estado === 'ok' ? iconeCat(i.categoria, i.tipo) : '🚫'}</span>
         <span class="mov-txt"><strong>${esc(i.desc)}</strong><small>${i.estado === 'ok' ? esc(i.categoria) : 'Ignorado'} · ${fmtData(i.data)}</small></span>
@@ -400,13 +423,37 @@ function vTriagem() {
 
 async function importarExtrato() {
   const arq = await lerArquivo('.ofx,.csv,.txt'); if (!arq) return;
-  let itens = [];
-  try { itens = Extrato.preparar(Extrato.lerArquivo(arq.nome, arq.texto), { lancamentos: db.lancamentos, meuNome: App.usuario?.nome }); }
-  catch (e) { console.error(e); }
-  if (!itens.length) return alert('Não encontrei lançamentos neste arquivo. Use o extrato em OFX ou CSV baixado do seu banco.');
-  ui.triagem = { arquivo: arq.nome, itens };
-  ui.aba = 'financas'; ui.plano = null;
-  render();
+  const det = Extrato.detectar(arq.nome, arq.texto);
+  let ultimo = {};
+  try { ultimo = JSON.parse(localStorage.getItem('apg-extrato')) || {}; } catch (e) { /* sem armazenamento */ }
+  const banco = det.banco || ultimo.banco || '', meio = det.banco ? det.meio : ultimo.meio || det.meio;
+  const opcao = (v, emoji, titulo, sub) => `<label class="escolha"><input type="radio" name="meio" value="${v}" ${meio === v ? 'checked' : ''} required>
+    <span><b>${emoji} ${titulo}</b><small>${sub}</small></span></label>`;
+  abrirModal(`
+    <h2>De onde é este extrato?</h2>
+    <p class="muted small" style="margin:-6px 0 14px">${esc(arq.nome)}</p>
+    <form class="form" data-f="modal">
+      <label class="full">Banco<input name="banco" list="bancos" required value="${esc(banco)}" placeholder="Ex.: Inter, Bradesco, Nubank" autocomplete="off"></label>
+      <datalist id="bancos">${Extrato.BANCOS.map(b => `<option value="${b}">`).join('')}</datalist>
+      <div class="full"><span class="rotulo">Tipo de extrato</span>
+        <div class="escolhas">
+          ${opcao('debito', '🏦', 'Conta / débito', 'Extrato da conta: Pix, boletos, compras no débito')}
+          ${opcao('credito', '💳', 'Cartão de crédito', 'Fatura do cartão: compras no crédito')}
+        </div></div>
+      ${det.banco ? '<p class="muted small full" style="margin:0">Reconheci pelo arquivo. Confira e corrija se precisar.</p>' : ''}
+      <div class="modal-acoes full"><button type="button" class="btn" data-a="fecharModal">Cancelar</button><button class="btn pri">Continuar</button></div>
+    </form>`, d => {
+    const opc = { banco: d.banco.trim(), meio: d.meio === 'credito' ? 'credito' : 'debito' };
+    try { localStorage.setItem('apg-extrato', JSON.stringify(opc)); } catch (e) { /* sem armazenamento */ }
+    let itens = [];
+    try {
+      itens = Extrato.preparar(Extrato.lerArquivo(arq.nome, arq.texto, opc), { ...opc, lancamentos: db.lancamentos, meuNome: App.usuario?.nome,
+        categorias: [...CATEGORIAS.despesa, ...CATEGORIAS.receita] });
+    } catch (e) { console.error(e); }
+    if (!itens.length) return alert('Não encontrei lançamentos neste arquivo. Use o extrato em OFX ou CSV baixado do seu banco.');
+    ui.triagem = { arquivo: arq.nome, ...opc, itens };
+    ui.aba = 'financas'; ui.plano = null;
+  });
 }
 const itemTriagem = id => ui.triagem?.itens.find(i => i.id === id);
 
@@ -606,9 +653,9 @@ function modalPlano(p, tipoInicial) {
 /* ---------- CSV ---------- */
 function csvCampo(v) { v = String(v ?? ''); return /[;"\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v; }
 function exportarCSV() {
-  const linhas = [['Data', 'Tipo', 'Descrição', 'Categoria', 'Valor', 'Fixo']];
+  const linhas = [['Data', 'Tipo', 'Descrição', 'Categoria', 'Valor', 'Fixo', 'Banco', 'Meio']];
   db.lancamentos.slice().sort((a, b) => a.data.localeCompare(b.data)).forEach(l =>
-    linhas.push([fmtData(l.data), l.tipo, l.desc, l.categoria, (l.tipo === 'despesa' ? -l.valor : l.valor).toFixed(2).replace('.', ','), l.fixo ? 'sim' : '']));
+    linhas.push([fmtData(l.data), l.tipo, l.desc, l.categoria, (l.tipo === 'despesa' ? -l.valor : l.valor).toFixed(2).replace('.', ','), l.fixo ? 'sim' : '', l.banco || '', MEIOS[l.meio] || '']));
   baixar(`financas-${hoje()}.csv`, '﻿' + linhas.map(r => r.map(csvCampo).join(';')).join('\r\n'), 'text/csv;charset=utf-8');
 }
 function lerCSV(txt) {
@@ -677,16 +724,23 @@ const acoes = {
     if (!desc) return alert('Preencha a descrição antes de confirmar.');
     if (!valor) return alert('O valor precisa ser maior que zero.');
     if (!/^\d{4}-\d{2}-\d{2}$/.test(i.data || '')) return alert('Preencha a data antes de confirmar.');
-    const l = { id: uid(), tipo: i.tipo, desc, categoria: String(i.categoria || '').trim() || 'Outros', valor, data: i.data, fixo: !!i.fixo, origem: i.origem };
+    // Validação: se este valor já está lançado (mesma data, valor e tipo), só entra com confirmação explícita.
+    const igual = parecido(i);
+    if (igual && !confirm(`Atenção: este valor parece já estar lançado.\n\nJá existe: ${descreveLanc(igual)}\n\nLançar mesmo assim? (vai ficar em dobro se for o mesmo movimento)`)) return;
+    const l = { id: uid(), tipo: i.tipo, desc, categoria: String(i.categoria || '').trim() || 'Outros', valor, data: i.data, fixo: !!i.fixo,
+      origem: i.origem, banco: ui.triagem.banco, meio: ui.triagem.meio };
     db.lancamentos.push(l);
     Object.assign(i, { estado: 'ok', lancId: l.id, desc, valor, categoria: l.categoria });
     if (!ui.triagem.itens.some(x => x.estado === 'pendente')) reagir('feliz', 'Extrato em dia! 🎉', 'Triagem concluída! ✨');
   },
+  triForcar: v => { const i = itemTriagem(v); if (i) Object.assign(i, { estado: 'pendente', forcar: true }); },
   triIgnorar: v => { const i = itemTriagem(v); if (i) i.estado = 'ignorado'; },
   triDesfazer: v => {
     const i = itemTriagem(v); if (!i) return;
     if (i.estado === 'ok') db.lancamentos = db.lancamentos.filter(l => l.id !== i.lancId);
     i.estado = 'pendente'; delete i.lancId;
+    // Se outro igual já estava lançado antes desta importação, volta para a lista de "já importados".
+    if (!i.forcar && db.lancamentos.some(l => l.origem && l.origem === i.origem)) i.estado = 'duplicado';
   },
   sairTriagem: () => {
     const t = ui.triagem; if (!t) return;

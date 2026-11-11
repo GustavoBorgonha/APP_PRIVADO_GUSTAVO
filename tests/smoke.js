@@ -105,18 +105,25 @@ async function importacaoExtrato(navegador, url, erros) {
   await ctx.route('**/firebase-config.js', r => r.fulfill({ contentType: 'text/javascript', body: 'window.FIREBASE_CONFIG = null;' }));
   const p = await ctx.newPage();
   p.on('pageerror', e => erros.push('extrato: ' + e.message));
-  p.on('dialog', d => d.accept());
+  const avisos = [];
+  p.on('dialog', d => { avisos.push(d.message()); d.accept(); });
   await p.goto(url);
   const salvos = () => p.evaluate(() => (JSON.parse(localStorage.getItem('apg-dados-v1')) || { lancamentos: [] }).lancamentos);
-  const importar = async (nome, conteudo) => {
+  // Escolhe o arquivo e responde "de onde é este extrato" (banco + conta/cartão).
+  const importar = async (nome, conteudo, banco, meio = 'debito') => {
     const [fc] = await Promise.all([p.waitForEvent('filechooser'), p.click('[data-a=importarExtrato]')]);
     await fc.setFiles({ name: nome, mimeType: 'text/plain', buffer: Buffer.from(conteudo, 'latin1') });
-    await p.waitForSelector('.tri');
+    await p.waitForSelector('dialog [name=banco]');
+    if (banco) await p.fill('dialog [name=banco]', banco);
+    await p.check(`dialog [name=meio][value=${meio}]`, { force: true });
+    await p.click('dialog >> text=Continuar');
+    await p.waitForSelector('.tri-progresso');
   };
   const cartao = texto => p.locator('.tri', { hasText: texto });
 
-  await importar('extrato.ofx', OFX_TESTE);
+  await importar('extrato.ofx', OFX_TESTE, 'Inter');
   confere(await p.locator('.tri').count() === 3, 'OFX: encontra os 3 movimentos');
+  confere((await p.textContent('.selo')).includes('Inter') && (await p.textContent('.selo')).includes('débito'), 'triagem mostra o banco e o tipo escolhidos');
   confere((await salvos()).length === 0, 'nada entra nas finanças antes de confirmar');
   confere(await cartao('CONDOMINIO').locator('[data-f=desc]').inputValue() === 'Condomínio Edificio Teste', 'pré-preenche a descrição');
   confere(await cartao('CONDOMINIO').locator('[data-f=categoria]').inputValue() === 'Moradia', 'sugere a categoria');
@@ -125,20 +132,41 @@ async function importacaoExtrato(navegador, url, erros) {
   await cartao('LANCHONETE').locator('[data-a=triConfirmar]').click();
   let l = await salvos();
   confere(l.length === 1 && l[0].desc === 'Lanche da tarde' && l[0].valor === 30 && l[0].tipo === 'despesa' && l[0].data === '2026-03-04', 'confirmar grava só aquele lançamento, com a edição feita');
+  confere(l[0].banco === 'Inter' && l[0].meio === 'debito', 'lançamento guarda o banco e se é débito ou crédito');
   await cartao('FULANA').locator('[data-a=triIgnorar]').click();
   confere((await salvos()).length === 1 && await p.locator('.tri').count() === 1, 'ignorar descarta sem gravar');
-  await p.click('.tri-feitos summary');
+  await p.click('.tri-revisados summary');
   await p.locator('.tri-feito', { hasText: 'Lanche da tarde' }).locator('[data-a=triDesfazer]').click();
   confere((await salvos()).length === 0 && await p.locator('.tri').count() === 2, 'desfazer tira o lançamento e devolve para a triagem');
   await cartao('LANCHONETE').locator('[data-a=triConfirmar]').click();
   await p.click('[data-a=sairTriagem]');   // sai com pendentes (confirma o aviso)
   confere((await salvos()).length === 1 && await p.isVisible('text=Extrato'), 'sair da triagem mantém só o que foi confirmado');
 
-  await importar('extrato.ofx', OFX_TESTE);
-  confere(await cartao('LANCHONETE').locator('.tri-aviso').count() === 1 && await cartao('CONDOMINIO').locator('.tri-aviso').count() === 0, 'reimportar avisa o que já foi importado');
+  await importar('extrato.ofx', OFX_TESTE, 'Inter');
+  confere(await p.locator('.tri').count() === 2 && await p.locator('.tri-dups .tri-feito', { hasText: 'Lanche da tarde' }).count() === 1,
+    'reimportar: o que já foi importado fica de fora da triagem');
+  confere((await salvos()).length === 1, 'reimportar não duplica nada sozinho');
   await p.click('[data-a=sairTriagem]');
 
-  await importar('extrato.csv', CSV_TESTE);
+  // Mesmo valor, mesma data, vindo de outro arquivo: precisa avisar e pedir confirmação.
+  await importar('outro.csv', 'Data;Histórico;Valor\n04/03/2026;LANCHE REPETIDO;-30,00', 'Bradesco');
+  confere(await cartao('LANCHE REPETIDO').locator('.tri-aviso.forte').count() === 1, 'valor já lançado aparece com aviso na triagem');
+  avisos.length = 0;
+  await cartao('LANCHE REPETIDO').locator('[data-a=triConfirmar]').click();
+  confere(avisos.some(a => a.includes('já estar lançado')), 'confirmar um valor repetido pede confirmação extra');
+  await p.locator('.tri-revisados .tri-feito', { hasText: 'Lanche repetido' }).locator('[data-a=triDesfazer]').click();
+  await cartao('LANCHE REPETIDO').locator('[data-a=triIgnorar]').click();
+  await p.click('[data-a=sairTriagem]');
+
+  // Fatura do cartão: compra vem com valor positivo e deve virar despesa no crédito.
+  await importar('fatura.csv', 'Data,Lançamento,Categoria,Tipo,Valor\n02/03/2026,FARMACIA TESTE,SAUDE,Compra à vista,"R$ 45,90"', 'Inter', 'credito');
+  confere(await cartao('FARMACIA').locator('[data-f=tipo]').inputValue() === 'despesa' && await cartao('FARMACIA').locator('[data-f=categoria]').inputValue() === 'Saúde', 'fatura do cartão: compra vira despesa');
+  await cartao('FARMACIA').locator('[data-a=triConfirmar]').click();
+  await p.click('[data-a=sairTriagem]');
+  l = await salvos();
+  confere(l.length === 2 && l.some(x => x.valor === 45.9 && x.meio === 'credito' && x.banco === 'Inter'), 'compra do cartão fica marcada como crédito');
+
+  await importar('extrato.csv', CSV_TESTE, 'Bradesco');
   confere(await p.locator('.tri').count() === 2, 'CSV do banco: lê crédito e débito e ignora o resto');
   confere(await cartao('C/SAL').locator('[data-f=categoria]').inputValue() === 'Salário' && await cartao('C/SAL').locator('[data-f=tipo]').inputValue() === 'receita', 'CSV: crédito vira receita (salário)');
   confere(await cartao('PACOTE').locator('[data-f=desc]').inputValue() === 'Pacote de serviços', 'CSV: acerta acentos (arquivo em Latin-1)');
@@ -146,7 +174,7 @@ async function importacaoExtrato(navegador, url, erros) {
   await cartao('PACOTE').locator('[data-a=triConfirmar]').click();
   await p.waitForSelector('text=Tudo revisado!');
   l = await salvos();
-  confere(l.length === 3 && l.some(x => x.valor === 2500 && x.tipo === 'receita') && l.some(x => x.valor === 16.65 && x.tipo === 'despesa'), 'tudo revisado: 3 lançamentos gravados com os valores certos');
+  confere(l.length === 4 && l.some(x => x.valor === 2500 && x.tipo === 'receita') && l.some(x => x.valor === 16.65 && x.tipo === 'despesa'), 'tudo revisado: lançamentos gravados com os valores certos');
   await ctx.close();
 }
 
