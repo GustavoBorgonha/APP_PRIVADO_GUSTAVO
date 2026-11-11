@@ -5,7 +5,9 @@ PWA em JavaScript puro (sem framework, sem build) para finanças pessoais e plan
 
 ## Como funciona
 
-- **Site:** https://appgustavo.netlify.app — o Netlify publica sozinho a cada commit na `main`.
+- **Site:** https://appgustavo.gustavo13bor.workers.dev — o Cloudflare (Workers com arquivos estáticos,
+  `wrangler.jsonc` + `.assetsignore` + `_headers`) publica sozinho a cada commit na `main`. Saiu do
+  Netlify em novembro/2026 por causa do limite de créditos do plano grátis.
 - **Login e dados:** Firebase (projeto `projetogustavoapp-88b20`): login Google + Cloud Firestore.
   - Coleções: `lancamentos`, `planos` (dados compartilhados entre os usuários autorizados),
     `triagens` (triagem de extrato em andamento) e
@@ -66,9 +68,7 @@ PWA em JavaScript puro (sem framework, sem build) para finanças pessoais e plan
 
 - Rode `node tests/smoke.js` antes de cada commit (precisa de `playwright` instalado).
 - Commits em português, direto na `main` (o site atualiza em ~1 minuto).
-- **Créditos do Netlify (plano grátis: 300/mês, cada publicação gasta ~15):** cada push na `main` é uma
-  publicação. Agrupe as mudanças e, em commits intermediários, coloque `[skip netlify]` na mensagem
-  para não publicar. Se os créditos acabarem, o site fica fora do ar até o ciclo seguinte.
 - Manter sem dependências e sem etapa de build.
 - O Gustavo não é programador experiente: explique os passos de configuração de forma simples.
-- Guia de configuração (Firebase, Netlify): `CONFIGURAR.md`.
+- Guia de configuração (Firebase, Cloudflare): `CONFIGURAR.md`.
+- Arquivo novo que não deve ir para o site? Adicione no `.assetsignore`.

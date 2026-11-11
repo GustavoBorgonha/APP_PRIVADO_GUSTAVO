@@ -23,7 +23,8 @@ instalado no celular como aplicativo, inclusive offline.
   computador e celulares (funciona offline e sincroniza depois).
 - **Sem configurar**: modo local — os dados ficam só no aparelho (localStorage).
 
-O site é publicado pelo **Netlify** a partir deste repositório privado.
+O site é publicado pelo **Cloudflare** (Workers com arquivos estáticos) a partir deste repositório:
+**https://appgustavo.gustavo13bor.workers.dev**
 
 ## Rodar localmente
 
@@ -42,5 +43,5 @@ Depois abra http://localhost:8000.
 | `app.js` | toda a lógica do app |
 | `nuvem.js`, `firebase-config.js` | login Google e sincronização (Firebase) |
 | `firestore.rules` | regras de segurança do banco de dados |
-| `netlify.toml` | configuração da publicação |
+| `wrangler.jsonc`, `.assetsignore`, `_headers` | configuração da publicação no Cloudflare |
 | `manifest.webmanifest`, `sw.js`, `icons/` | instalação como app e funcionamento offline |

@@ -5,6 +5,8 @@
   "compatibility_date": "2025-09-01",
   // Endereço grátis do Cloudflare: appgustavo.<seu-subdominio>.workers.dev
   "workers_dev": true,
+  // Sem endereços de pré-visualização (não são usados).
+  "preview_urls": false,
   "assets": {
     "directory": "./"
   }
