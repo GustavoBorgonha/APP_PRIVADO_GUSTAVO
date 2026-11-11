@@ -814,10 +814,24 @@ function modalCategoria(c, nomeInicial) {
   const nova = !c;
   c = c || { nome: nomeInicial || '', tipo: 'despesa', emoji: '🏷️', img: '' };
   const fixa = !nova && CATS_FIXAS.includes(c.nome);
+  // Mover em massa: todos os lançamentos desta categoria (ou do nome solto, sem cadastro) para outra.
+  const origem = nova ? (nomeInicial || '') : c.nome;
+  const usados = origem ? db.lancamentos.filter(l => l.categoria === origem).length : 0;
+  const destinos = listaCategorias().filter(x => x.nome !== origem);
+  const mover = usados ? `<div class="full mover"><span class="rotulo">Mover lançamentos</span>
+      <p class="muted small" style="margin:0 0 8px">${usados === 1 ? '1 lançamento usa' : `${usados} lançamentos usam`} "${esc(origem)}". Mande ${usados === 1 ? 'ele' : 'todos'} para outra categoria de uma vez:</p>
+      <div class="mover-linha"><select id="mover-para" aria-label="Categoria de destino">
+        ${[['despesa', 'Despesas'], ['receita', 'Receitas'], ['ambos', 'Servem para as duas']].map(([t, rot]) => {
+          const g = destinos.filter(x => x.tipo === t);
+          return g.length ? `<optgroup label="${rot}">${g.map(x => `<option value="${esc(x.nome)}">${x.emoji && !x.img ? x.emoji + ' ' : ''}${esc(x.nome)}</option>`).join('')}</optgroup>` : '';
+        }).join('')}</select>
+        <button type="button" class="btn" data-a="moverLancs" data-v="${esc(origem)}">Mover ${usados === 1 ? '' : 'os ' + usados}</button></div>
+    </div>` : '';
   const tipoOp = (v, rot) => `<label class="escolha"><input type="radio" name="tipo" value="${v}" ${c.tipo === v ? 'checked' : ''} ${fixa ? 'disabled' : ''}><span><b>${rot}</b></span></label>`;
   abrirModal(`
-    <h2>${nova ? 'Nova categoria' : 'Editar categoria'}</h2>
+    <h2>${nova ? (usados ? `"${esc(origem)}" sem cadastro` : 'Nova categoria') : 'Editar categoria'}</h2>
     <form class="form" data-f="modal">
+      ${nova ? mover + (usados ? '<p class="muted small full" style="margin:0">Ou cadastre como categoria, com um ícone:</p>' : '') : ''}
       <div class="full cat-previa"><span class="cat-ic grande" id="cat-prev">${c.img ? `<img class="cat-img" src="${esc(c.img)}" alt="">` : esc(c.emoji || '🏷️')}</span>
         <div><b id="cat-prev-nome">${esc(c.nome) || 'Nome da categoria'}</b><small class="muted">Assim ela aparece no extrato</small></div></div>
       <label class="full">Nome<input name="nome" required maxlength="40" value="${esc(c.nome)}" ${fixa ? 'readonly' : ''} placeholder="Ex.: Pets, Farmácia, Presentes" autocomplete="off"></label>
@@ -830,6 +844,7 @@ function modalCategoria(c, nomeInicial) {
           <label>Ou use o seu emoji<input name="emojiProprio" maxlength="16" placeholder="Toque e escolha no teclado 😀" autocomplete="off"></label>
           <button type="button" class="btn" data-a="imagemCat">🖼️ Usar uma imagem</button>
         </div></div>
+      ${nova ? '' : mover}
       <input type="hidden" name="emoji" value="${esc(c.emoji || '🏷️')}"><input type="hidden" name="img" value="${esc(c.img || '')}">
       <div class="modal-acoes full">
         ${!nova && !fixa ? `<button type="button" class="btn perigo" data-a="excluirCat" data-v="${esc(c.id)}" style="margin-right:auto">Excluir</button>` : ''}
@@ -1069,6 +1084,18 @@ const acoes = {
   irCategorias: () => { fecharModal(); ui.aba = 'categorias'; ui.plano = null; ui.naTriagem = false; },
   escolherEmoji: v => { const f = $('#modal-body form'); if (!f) return; f.emoji.value = v; f.img.value = ''; f.emojiProprio.value = ''; previaCat(); },
   imagemCat: () => imagemParaIcone().then(dado => { const f = $('#modal-body form'); if (dado && f) { f.img.value = dado; previaCat(); } }),
+  moverLancs: origem => {
+    const destino = $('#mover-para')?.value; if (!destino || destino === origem) return;
+    const cat = catPorNome(destino);
+    const todos = db.lancamentos.filter(l => l.categoria === origem);
+    const cabem = todos.filter(l => !cat || serveTipo(cat, l.tipo)), ficam = todos.length - cabem.length;
+    if (!cabem.length) return alert(`"${destino}" não serve para ${todos[0].tipo === 'receita' ? 'receitas' : 'despesas'}. Escolha outra categoria.`);
+    const avisoTipo = ficam ? `\n\n${ficam === 1 ? '1 lançamento fica' : `${ficam} lançamentos ficam`} em "${origem}", porque "${destino}" só serve para ${cat.tipo === 'despesa' ? 'despesas' : 'receitas'}.` : '';
+    if (!confirm(`Mover ${cabem.length === 1 ? '1 lançamento' : `${cabem.length} lançamentos`} de "${origem}" para "${destino}"?${avisoTipo}`)) return;
+    cabem.forEach(l => { l.categoria = destino; });
+    fecharModal();
+    reagir('feliz', 'Tudo arrumadinho! 🗂️', 'Mudança feita! 📦');
+  },
   excluirCat: v => {
     const c = listaCategorias().find(x => x.id === v); if (!c || CATS_FIXAS.includes(c.nome)) return;
     const usados = db.lancamentos.filter(l => l.categoria === c.nome && serveTipo(c, l.tipo));

@@ -32,6 +32,8 @@ PWA em JavaScript puro (sem framework, sem build) para finanças pessoais e plan
   nome, tipo (despesa/receita/ambos) e ícone (emoji da lista, emoji próprio ou imagem reduzida a 96px).
   Use `listaCategorias()`, `nomesCats(tipo)`, `iconeCat(nome, tipo)` (devolve HTML) e `opcoesCats()`.
   Renomear atualiza os lançamentos; excluir passa os lançamentos para "Outros".
+  A janela também tem "Mover lançamentos" (`moverLancs`): leva todos os lançamentos daquela categoria
+  (cadastrada ou solta) para outra; os de tipo incompatível com o destino ficam onde estão.
 - Categoria "Transferência entre contas" (`TRANSF`): aparece no extrato, mas fica fora de receitas,
   despesas e saldo (`contaNoSaldo`). Na importação é sugerida quando o nome do usuário aparece no movimento.
 - `app.js` — toda a lógica e as telas (Início, Finanças, Extratos, Planos, Dados).

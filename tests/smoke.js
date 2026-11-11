@@ -114,6 +114,20 @@ async function modoLocal(navegador, url, erros) {
   const depoisCat = await p.evaluate(() => JSON.parse(localStorage.getItem('apg-dados-v1')));
   confere(depoisCat.lancamentos.find(l => l.desc === 'Ração').categoria === 'Outros' && !(await p.isVisible('.cat-card:has-text("Bichos")')),
     'excluir categoria passa os lançamentos para Outros');
+  // Mover em massa: categoria digitada antes (sem cadastro) vai inteira para outra.
+  await p.evaluate(() => {
+    const d = JSON.parse(localStorage.getItem('apg-dados-v1'));
+    ['a', 'b'].forEach(x => d.lancamentos.push({ id: 'velho' + x, tipo: 'despesa', desc: 'Fatura ' + x, categoria: 'fat', valor: 10, data: '2026-01-1' + (x === 'a' ? 0 : 1), fixo: false }));
+    localStorage.setItem('apg-dados-v1', JSON.stringify(d));
+  });
+  await p.reload();
+  await p.click('.nav >> text=Finanças'); await p.click('text=🏷️ Categorias');
+  await p.click('.cat-card.solta:has-text("fat")');
+  await p.selectOption('#mover-para', 'Cartão de crédito');
+  await p.click('dialog [data-a=moverLancs]');
+  const movidos = await p.evaluate(() => JSON.parse(localStorage.getItem('apg-dados-v1')).lancamentos.filter(l => l.id.startsWith('velho')).map(l => l.categoria));
+  confere(movidos.length === 2 && movidos.every(c => c === 'Cartão de crédito') && !(await p.isVisible('.cat-card.solta:has-text("fat")')),
+    'mover em massa leva todos os lançamentos para a outra categoria');
   await p.click('.nav >> text=Início');
 
   await p.click('text=+ Novo plano');
