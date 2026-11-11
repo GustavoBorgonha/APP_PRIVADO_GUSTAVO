@@ -33,7 +33,8 @@ PWA em JavaScript puro (sem framework, sem build) para finanças pessoais e plan
 - `extrato.js` — lê extratos do banco (OFX e CSV com Crédito/Débito) e sugere descrição/categoria
   (`Extrato.preparar`). Nunca grava direto: os itens vão para `ui.triagem` e a tela `vTriagem` (em
   `app.js`) exige "Confirmar" em cada um. O lançamento confirmado guarda `origem` (ex.: `ofx:FITID`)
-  além de `banco` e `meio` (`debito`/`credito`), escolhidos na janela "De onde é este extrato?".
+  além de `banco`, `meio` (`debito`/`credito`) e `titular` (de quem é a conta), escolhidos na janela
+  "De onde é este extrato?". O titular é texto livre, com sugestões dos já usados.
   Duplicados: mesmo `origem` fica fora da triagem (estado `duplicado`); mesma data+valor+tipo pede
   confirmação extra ao confirmar (`parecido`).
   Cada importação tem um `lote` (salvo no lançamento com `loteArquivo`/`loteEm`): "Cancelar importação"

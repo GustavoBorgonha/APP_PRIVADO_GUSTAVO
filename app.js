@@ -184,7 +184,18 @@ const ICONE_CAT = {
   'Salário': '💼', 'Renda extra': '✨', 'Rendimentos': '📈', 'Reembolso': '↩️',
 };
 const MEIOS = { debito: 'débito', credito: 'crédito' };
-const rotuloOrigem = x => x.banco || x.meio ? [x.banco, MEIOS[x.meio]].filter(Boolean).join(' ') : '';
+const rotuloOrigem = x => {
+  const conta = x.banco || x.meio ? [x.banco, MEIOS[x.meio]].filter(Boolean).join(' ') : '';
+  return [conta, x.titular].filter(Boolean).join(' · ');
+};
+// Titulares já usados (para sugerir no campo "De quem é a conta").
+const titulares = () => {
+  const nomes = new Set(db.lancamentos.map(l => l.titular).filter(Boolean));
+  const eu = App.usuario?.nome?.split(' ')[0];
+  if (eu) nomes.add(eu);
+  nomes.add('Conjunta');
+  return [...nomes];
+};
 const iconeCat = (cat, tipo) => ICONE_CAT[cat] || (tipo === 'receita' ? '💵' : '🧾');
 const DIAS = ['domingo', 'segunda', 'terça', 'quarta', 'quinta', 'sexta', 'sábado'];
 function rotuloDia(d) {
@@ -446,7 +457,7 @@ function vTriagem() {
     <div class="topo">
       <div><button class="btn mini voltar" data-a="sairTriagem" title="A triagem fica salva para continuar depois">${IC.voltar} Extratos</button>
         <h1 style="margin-top:10px">Triagem do extrato</h1>
-        <p class="sub" style="margin:0"><span class="selo">${esc(t.banco)} · ${t.meio === 'credito' ? 'cartão de crédito' : 'conta (débito)'}</span>
+        <p class="sub" style="margin:0"><span class="selo">${esc(t.banco)} · ${t.meio === 'credito' ? 'cartão de crédito' : 'conta (débito)'}${t.titular ? ' · ' + esc(t.titular) : ''}</span>
           ${esc(t.arquivo)} · nada entra nas suas finanças sem você confirmar.</p></div>
       <button class="btn perigo" data-a="cancelarImportacao">Cancelar importação</button>
     </div>
@@ -485,6 +496,8 @@ async function importarExtrato() {
   let ultimo = {};
   try { ultimo = JSON.parse(localStorage.getItem('apg-extrato')) || {}; } catch (e) { /* sem armazenamento */ }
   const banco = det.banco || ultimo.banco || '', meio = det.banco ? det.meio : ultimo.meio || det.meio;
+  // De quem é a conta: lembra o último titular usado para este banco + tipo; senão, quem está logado.
+  const titular = (ultimo.titulares || {})[`${banco}|${meio}`] || ultimo.titular || App.usuario?.nome?.split(' ')[0] || '';
   const opcao = (v, emoji, titulo, sub) => `<label class="escolha"><input type="radio" name="meio" value="${v}" ${meio === v ? 'checked' : ''} required>
     <span><b>${emoji} ${titulo}</b><small>${sub}</small></span></label>`;
   abrirModal(`
@@ -493,6 +506,8 @@ async function importarExtrato() {
     <form class="form" data-f="modal">
       <label class="full">Banco<input name="banco" list="bancos" required value="${esc(banco)}" placeholder="Ex.: Inter, Bradesco, Nubank" autocomplete="off"></label>
       <datalist id="bancos">${Extrato.BANCOS.map(b => `<option value="${b}">`).join('')}</datalist>
+      <label class="full">De quem é a conta<input name="titular" list="titulares" required value="${esc(titular)}" placeholder="Ex.: Gustavo, Conjunta" autocomplete="off"></label>
+      <datalist id="titulares">${titulares().map(n => `<option value="${esc(n)}">`).join('')}</datalist>
       <div class="full"><span class="rotulo">Tipo de extrato</span>
         <div class="escolhas">
           ${opcao('debito', '🏦', 'Conta / débito', 'Extrato da conta: Pix, boletos, compras no débito')}
@@ -501,8 +516,11 @@ async function importarExtrato() {
       ${det.banco ? '<p class="muted small full" style="margin:0">Reconheci pelo arquivo. Confira e corrija se precisar.</p>' : ''}
       <div class="modal-acoes full"><button type="button" class="btn" data-a="fecharModal">Cancelar</button><button class="btn pri">Continuar</button></div>
     </form>`, d => {
-    const opc = { banco: d.banco.trim(), meio: d.meio === 'credito' ? 'credito' : 'debito' };
-    try { localStorage.setItem('apg-extrato', JSON.stringify(opc)); } catch (e) { /* sem armazenamento */ }
+    const opc = { banco: d.banco.trim(), meio: d.meio === 'credito' ? 'credito' : 'debito', titular: d.titular.trim() };
+    try {
+      const lembrar = { ...ultimo, ...opc, titulares: { ...(ultimo.titulares || {}), [`${opc.banco}|${opc.meio}`]: opc.titular } };
+      localStorage.setItem('apg-extrato', JSON.stringify(lembrar));
+    } catch (e) { /* sem armazenamento */ }
     let itens = [];
     try {
       itens = Extrato.preparar(Extrato.lerArquivo(arq.nome, arq.texto, opc), { ...opc, lancamentos: db.lancamentos, meuNome: App.usuario?.nome,
@@ -588,7 +606,7 @@ function vPlano(p) {
 function lotesImportados() {
   const m = new Map();
   db.lancamentos.filter(l => l.lote).forEach(l => {
-    const g = m.get(l.lote) || { id: l.lote, arquivo: l.loteArquivo || 'Extrato', em: l.loteEm || '', banco: l.banco, meio: l.meio, itens: [] };
+    const g = m.get(l.lote) || { id: l.lote, arquivo: l.loteArquivo || 'Extrato', em: l.loteEm || '', banco: l.banco, meio: l.meio, titular: l.titular, itens: [] };
     g.itens.push(l); m.set(l.lote, g);
   });
   return [...m.values()].sort((a, b) => (b.em || '').localeCompare(a.em || ''));
@@ -622,7 +640,7 @@ function vExtratos() {
       return `<div class="card lote ${aberto ? 'aberto' : ''}">
         <div class="lote-cab" data-a="abrirLote" data-v="${g.id}" role="button" tabindex="0" aria-expanded="${aberto}">
           <span class="mov-ic">${g.meio === 'credito' ? '💳' : '🏦'}</span>
-          <span class="mov-txt"><strong>${esc(g.banco || 'Banco não informado')} · ${meioRot(g.meio)}</strong>
+          <span class="mov-txt"><strong>${esc(g.banco || 'Banco não informado')} · ${meioRot(g.meio)}${g.titular ? ` <span class="titular">${esc(g.titular)}</span>` : ''}</strong>
             <small>${esc(g.arquivo)}</small>
             <small>${fmtData(datas[0])} a ${fmtData(datas[datas.length - 1])}${g.em ? ' · importado em ' + fmtData(g.em) : ''}</small></span>
           <span class="lote-num"><b>${g.itens.length}</b><small>${g.itens.length === 1 ? 'lançamento' : 'lançamentos'}</small></span>
@@ -771,9 +789,9 @@ function modalPlano(p, tipoInicial) {
 /* ---------- CSV ---------- */
 function csvCampo(v) { v = String(v ?? ''); return /[;"\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v; }
 function exportarCSV() {
-  const linhas = [['Data', 'Tipo', 'Descrição', 'Categoria', 'Valor', 'Fixo', 'Banco', 'Meio']];
+  const linhas = [['Data', 'Tipo', 'Descrição', 'Categoria', 'Valor', 'Fixo', 'Banco', 'Meio', 'Titular']];
   db.lancamentos.slice().sort((a, b) => a.data.localeCompare(b.data)).forEach(l =>
-    linhas.push([fmtData(l.data), l.tipo, l.desc, l.categoria, (l.tipo === 'despesa' ? -l.valor : l.valor).toFixed(2).replace('.', ','), l.fixo ? 'sim' : '', l.banco || '', MEIOS[l.meio] || '']));
+    linhas.push([fmtData(l.data), l.tipo, l.desc, l.categoria, (l.tipo === 'despesa' ? -l.valor : l.valor).toFixed(2).replace('.', ','), l.fixo ? 'sim' : '', l.banco || '', MEIOS[l.meio] || '', l.titular || '']));
   baixar(`financas-${hoje()}.csv`, '﻿' + linhas.map(r => r.map(csvCampo).join(';')).join('\r\n'), 'text/csv;charset=utf-8');
 }
 function lerCSV(txt) {
@@ -846,7 +864,7 @@ const acoes = {
     const igual = parecido(i);
     if (igual && !confirm(`Atenção: este valor parece já estar lançado.\n\nJá existe: ${descreveLanc(igual)}\n\nLançar mesmo assim? (vai ficar em dobro se for o mesmo movimento)`)) return;
     const l = { id: uid(), tipo: i.tipo, desc, categoria: String(i.categoria || '').trim() || 'Outros', valor, data: i.data, fixo: !!i.fixo,
-      origem: i.origem, banco: ui.triagem.banco, meio: ui.triagem.meio,
+      origem: i.origem, banco: ui.triagem.banco, meio: ui.triagem.meio, titular: ui.triagem.titular || '',
       lote: ui.triagem.lote, loteArquivo: ui.triagem.arquivo, loteEm: ui.triagem.em };
     db.lancamentos.push(l);
     Object.assign(i, { estado: 'ok', lancId: l.id, desc, valor, categoria: l.categoria });

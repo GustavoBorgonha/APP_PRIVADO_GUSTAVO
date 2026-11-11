@@ -129,12 +129,13 @@ async function importacaoExtrato(navegador, url, erros) {
   await p.goto(url);
   const salvos = () => p.evaluate(() => (JSON.parse(localStorage.getItem('apg-dados-v1')) || { lancamentos: [] }).lancamentos);
   // Escolhe o arquivo e responde "de onde é este extrato" (banco + conta/cartão).
-  const importar = async (nome, conteudo, banco, meio = 'debito') => {
+  const importar = async (nome, conteudo, banco, meio = 'debito', titular = 'Gustavo') => {
     await p.click('.nav >> text=Extratos');
     const [fc] = await Promise.all([p.waitForEvent('filechooser'), p.click('[data-a=importarExtrato]')]);
     await fc.setFiles({ name: nome, mimeType: 'text/plain', buffer: Buffer.from(conteudo, 'latin1') });
     await p.waitForSelector('dialog [name=banco]');
     if (banco) await p.fill('dialog [name=banco]', banco);
+    if (titular) await p.fill('dialog [name=titular]', titular);
     await p.check(`dialog [name=meio][value=${meio}]`, { force: true });
     await p.click('dialog >> text=Continuar');
     await p.waitForSelector('.tri-progresso');
@@ -152,7 +153,7 @@ async function importacaoExtrato(navegador, url, erros) {
   await cartao('LANCHONETE').locator('[data-a=triConfirmar]').click();
   let l = await salvos();
   confere(l.length === 1 && l[0].desc === 'Lanche da tarde' && l[0].valor === 30 && l[0].tipo === 'despesa' && l[0].data === '2026-03-04', 'confirmar grava só aquele lançamento, com a edição feita');
-  confere(l[0].banco === 'Inter' && l[0].meio === 'debito', 'lançamento guarda o banco e se é débito ou crédito');
+  confere(l[0].banco === 'Inter' && l[0].meio === 'debito' && l[0].titular === 'Gustavo', 'lançamento guarda o banco, se é débito ou crédito e de quem é a conta');
   await cartao('FULANA').locator('[data-a=triIgnorar]').click();
   confere((await salvos()).length === 1 && await p.locator('.tri').count() === 1, 'ignorar descarta sem gravar');
   await p.click('.tri-revisados summary');
@@ -185,12 +186,12 @@ async function importacaoExtrato(navegador, url, erros) {
   await p.click('[data-a=sairTriagem]');
 
   // Fatura do cartão: compra vem com valor positivo e deve virar despesa no crédito.
-  await importar('fatura.csv', 'Data,Lançamento,Categoria,Tipo,Valor\n02/03/2026,FARMACIA TESTE,SAUDE,Compra à vista,"R$ 45,90"', 'Inter', 'credito');
+  await importar('fatura.csv', 'Data,Lançamento,Categoria,Tipo,Valor\n02/03/2026,FARMACIA TESTE,SAUDE,Compra à vista,"R$ 45,90"', 'Inter', 'credito', 'Conjunta');
   confere(await cartao('FARMACIA').locator('[data-f=tipo]').inputValue() === 'despesa' && await cartao('FARMACIA').locator('[data-f=categoria]').inputValue() === 'Saúde', 'fatura do cartão: compra vira despesa');
   await cartao('FARMACIA').locator('[data-a=triConfirmar]').click();
   await p.click('[data-a=sairTriagem]');
   l = await salvos();
-  confere(l.length === 2 && l.some(x => x.valor === 45.9 && x.meio === 'credito' && x.banco === 'Inter'), 'compra do cartão fica marcada como crédito');
+  confere(l.length === 2 && l.some(x => x.valor === 45.9 && x.meio === 'credito' && x.banco === 'Inter' && x.titular === 'Conjunta'), 'compra do cartão fica marcada como crédito, com o titular escolhido');
 
   // Cancelar a importação inteira, no meio da triagem, apaga até o que já foi confirmado.
   const antes = (await salvos()).length;
