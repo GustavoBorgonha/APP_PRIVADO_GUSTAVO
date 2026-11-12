@@ -2,7 +2,8 @@
  * Meu Controle — ponte entre o app e a planilha "Cidades_SC_visitadas".
  *
  * Como instalar (passo a passo no CONFIGURAR.md):
- *   1. Na planilha: Extensões → Apps Script. Apague o que houver e cole este código.
+ *   1. Na planilha: Extensões → Apps Script (ou crie um projeto novo em https://script.google.com).
+ *      Apague o que houver e cole este código.
  *   2. Preencha EMAILS_PERMITIDOS com os e-mails que podem usar o app.
  *   3. Implantar → Nova implantação → App da Web
  *        Executar como: Eu  ·  Quem pode acessar: Qualquer pessoa
@@ -18,6 +19,8 @@ const FIREBASE_API_KEY = 'AIzaSyCxPbRVCEDeH0dod1imsw5QLFJfKVw7Nis';
 // Quem pode ler e gravar (em minúsculas).
 const EMAILS_PERMITIDOS = ['seu-email@gmail.com'];
 const ABA = 'Cidades';
+// A planilha é aberta pelo ID: funciona tanto colado dentro da planilha quanto num projeto novo em script.google.com.
+const PLANILHA_ID = '1pkkeJRWrSxaPUr93GzzqH0mPm-cBv3GuuGqb31PE5Y8';
 // Colunas da aba Cidades: A Município · B Microrregião · C Mesorregião · D Visitei? · E Data da visita · F Observações · G Latitude · H Longitude
 
 function doGet() {
@@ -28,10 +31,10 @@ function doPost(e) {
   try {
     const pedido = JSON.parse((e && e.postData && e.postData.contents) || '{}');
     if (!conferirLogin(pedido.token)) return resposta({ ok: false, erro: 'nao-autorizado' });
-    const aba = SpreadsheetApp.getActive().getSheetByName(ABA);
+    const aba = SpreadsheetApp.openById(PLANILHA_ID).getSheetByName(ABA);
     if (!aba) return resposta({ ok: false, erro: 'aba-nao-encontrada' });
     if (pedido.acao === 'salvar' && Array.isArray(pedido.mudancas) && pedido.mudancas.length) {
-      const trava = LockService.getDocumentLock();
+      const trava = LockService.getScriptLock();
       trava.waitLock(20000);
       try { salvar(aba, pedido.mudancas); } finally { trava.releaseLock(); }
     }
