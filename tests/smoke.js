@@ -326,6 +326,19 @@ Os dados acima tem como base 10/05/2026 às 23:10 e estão sujeitos a alteraçõ
   confere(await cartao('Heitorcezar').locator('[data-f=desc]').inputValue() === 'Heitorcezar', 'descrição da compra fica só com o estabelecimento');
   await p.click('[data-a=cancelarImportacao]');
 
+  // Sicredi (CSV, do mais novo para o mais antigo): banco, CPF/CNPJ, horário e banco de origem do Pix, data da compra no cartão.
+  await importar('sicredi.csv', `Data;Descricao;CodTransacao;Identificador;Tipo;Valor;Saldo
+06/05/2026;PAGAMENTO PIX - 12345678909 FULANO DE TAL;664;E8778153020260506111811abcdefghijk;DEBITO;- R$ 100,00;R$ 50,00
+06/05/2026;PAGAMENTO BOLETO -  12345678000195 LOJA TESTE LTDA;128;OC-1;DEBITO;- R$ 50,00;R$ 150,00
+05/05/2026;CARTAO DEBITO - PADARIA TESTE - BR;282;TRA-1-20260503-1;DEBITO;- R$ 10,00;R$ 200,00
+04/05/2026;RECEBIMENTO PIX - 12345678909 FULANO DE TAL;668;E00416968202605041509abc-CREDIT;CREDITO;+ R$ 210,00;R$ 210,00`, '', 'debito', 'Gustavo');
+  confere((await p.textContent('.selo')).includes('Sicredi') && (await p.textContent('.sub')).includes('saldo final R$') && (await p.textContent('.sub')).includes('50,00'), 'Sicredi: reconhece o banco e o saldo final é o do movimento mais novo');
+  const pix = await p.textContent('.tri:has-text("PAGAMENTO PIX")');
+  confere(pix.includes('08:18') && pix.includes('CPF 123.456.789-09') && await cartao('PAGAMENTO PIX').locator('[data-f=desc]').inputValue() === 'Pix: Fulano de Tal', 'Sicredi: Pix com horário, CPF e nome da pessoa');
+  confere((await p.textContent('.tri:has-text("RECEBIMENTO PIX")')).includes('veio do Inter') && (await p.textContent('.tri:has-text("CARTAO DEBITO")')).includes('compra em 03/05/2026'), 'Sicredi: banco de origem do Pix recebido e dia da compra no cartão');
+  confere((await p.textContent('.tri:has-text("BOLETO")')).includes('CNPJ 12.345.678/0001-95'), 'Sicredi: CNPJ do boleto');
+  await p.click('[data-a=cancelarImportacao]');
+
   // Detalhes: horário (quando o banco manda) e CPF/CNPJ ou banco do Pix tirados do texto.
   await importar('hora.ofx', `<OFX><BANKTRANLIST><STMTTRN><TRNTYPE>PAYMENT</TRNTYPE><DTPOSTED>20260415143200[-3:BRT]</DTPOSTED><TRNAMT>-13.98</TRNAMT><FITID>H1</FITID>
 <MEMO>Compra no debito: "No estabelecimento 51245806Larissa BOMBINHAS BRA"</MEMO></STMTTRN>

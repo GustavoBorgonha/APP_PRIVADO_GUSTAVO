@@ -178,7 +178,9 @@ function vContas() {
   const c = contas.find(x => x.chave === ui.conta) || contas[0];
   // Ordem do extrato do banco: por data; no mesmo dia, entradas antes das saídas.
   const movs = db.lancamentos.filter(l => chaveConta(l) === c.chave)
-    .sort((a, b) => a.data.localeCompare(b.data) || (a.tipo === b.tipo ? 0 : a.tipo === 'receita' ? -1 : 1));
+    .sort((a, b) => a.data.localeCompare(b.data)
+      || (a.lote && a.lote === b.lote && typeof a.seq === 'number' && typeof b.seq === 'number' ? a.seq - b.seq : 0)
+      || (a.tipo === b.tipo ? 0 : a.tipo === 'receita' ? -1 : 1));
   let calc = 0;
   const lista = movs.map(l => { calc += l.tipo === 'receita' ? l.valor : -l.valor; return { l, calc }; });
   // Saldo real: o app soma os lançamentos a partir de zero; quando o banco informa um saldo (saldo depois do

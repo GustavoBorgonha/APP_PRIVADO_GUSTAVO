@@ -70,7 +70,8 @@
       const acha = (...ini) => n.findIndex(c => ini.some(i => c.startsWith(i)));
       if (n.includes('data') && acha('credito', 'debito', 'valor') >= 0) {
         cab = { data: n.indexOf('data'), hist: acha('historico', 'descricao', 'lancamento', 'estabelecimento', 'titulo'), doc: acha('docto', 'documento'),
-          cred: acha('credito'), deb: acha('debito'), valor: acha('valor'), tipo: n.indexOf('tipo'), cat: acha('categ'), saldo: acha('saldo') };
+          cred: acha('credito'), deb: acha('debito'), valor: acha('valor'), tipo: n.indexOf('tipo'), cat: acha('categ'), saldo: acha('saldo'),
+          id: acha('identificador'), cod: acha('codtrans') };
         return;
       }
       if (!cab) return;
@@ -81,17 +82,26 @@
       if (!v) return;
       let tipo = v < 0 ? 'despesa' : 'receita';
       if (cab.tipo >= 0) { const t = semAcento(r[cab.tipo]); if (t.includes('rec')) tipo = 'receita'; else if (t.includes('desp')) tipo = 'despesa'; }
-      const hist = (r[cab.hist] || '').trim(), doc = cab.doc >= 0 ? (r[cab.doc] || '').trim() : '';
-      // Identificador para reconhecer o mesmo movimento se o arquivo for importado de novo.
-      let origem = `csv:${data}|${doc}|${v.toFixed(2)}|${semAcento(hist)}`;
+      const hist = consertar((r[cab.hist] || '').trim()), doc = cab.doc >= 0 ? (r[cab.doc] || '').trim() : '';
+      const ident = cab.id >= 0 ? (r[cab.id] || '').trim() : '', cod = cab.cod >= 0 ? (r[cab.cod] || '').trim() : '';
+      // Identificador para reconhecer o mesmo movimento se o arquivo for importado de novo
+      // (o Sicredi manda um identificador único por movimento: usa ele).
+      let origem = ident ? `csv:id:${ident}` : `csv:${data}|${doc}|${v.toFixed(2)}|${semAcento(hist)}`;
       vistos[origem] = (vistos[origem] || 0) + 1;
       if (vistos[origem] > 1) origem += '#' + vistos[origem];
       // Saldo depois do movimento, quando o banco manda (Bradesco manda).
       const saldoTxt = cab.saldo >= 0 ? String(r[cab.saldo] || '').trim() : '';
       const saldoBanco = /\d/.test(saldoTxt) ? g.parseValor(saldoTxt) : null;
-      if (saldoBanco !== null) { itens.meta.saldoFinal = saldoBanco; itens.meta.saldoData = data; }
-      itens.push({ origem, data, valor: Math.abs(v), tipo, bruto: hist, memo: hist, nome: '', saldoBanco, categoriaArquivo: cab.cat >= 0 ? (r[cab.cat] || '').trim() : '' });
+      const extra = dadosIdentificador(ident);
+      itens.push({ origem, data, valor: Math.abs(v), tipo, bruto: hist, memo: hist, nome: '', saldoBanco, codTransacao: cod, ...extra,
+        categoriaArquivo: cab.cat >= 0 ? (r[cab.cat] || '').trim() : '' });
     });
+    // Ordem do arquivo: alguns bancos (Sicredi) listam do mais novo para o mais antigo.
+    // "seq" guarda a ordem real dos movimentos (do mais antigo para o mais novo), inclusive dentro do mesmo dia.
+    const desc = itens.length > 1 && itens[0].data > itens[itens.length - 1].data;
+    itens.forEach((it, i) => { it.seq = desc ? itens.length - 1 - i : i; });
+    const ultimo = itens.slice().sort((a, b) => a.seq - b.seq).reverse().find(it => it.saldoBanco !== null);
+    if (ultimo) { itens.meta.saldoFinal = ultimo.saldoBanco; itens.meta.saldoData = ultimo.data; }
     return itens;
   }
 
@@ -110,7 +120,8 @@
       ['banco do brasil', 'Banco do Brasil'], ['caixa economica', 'Caixa'], ['santander', 'Santander'], ['sicredi', 'Sicredi'], ['sicoob', 'Sicoob']].find(([p]) => pista.includes(p));
     // CSV do Bradesco não diz o banco, mas tem um formato próprio: "Extrato de: Ag: … | Conta: …" + Docto. + Saldo.
     const bradesco = /Extrato de:\s*Ag:/i.test(txt) && /Docto\./i.test(txt) && /Saldo \(R\$\)/i.test(txt) ? 'Bradesco' : '';
-    const banco = CODIGOS[tag('BANKID').padStart(3, '0')] || CODIGOS[tag('FID').padStart(3, '0')] || (porNome ? porNome[1] : '') || bradesco;
+    const sicredi = /^\s*Data;Descricao;CodTransacao;Identificador;Tipo;Valor;Saldo/im.test(txt) ? 'Sicredi' : '';
+    const banco = CODIGOS[tag('BANKID').padStart(3, '0')] || CODIGOS[tag('FID').padStart(3, '0')] || (porNome ? porNome[1] : '') || bradesco || sicredi;
     const meio = /<CREDITCARDMSGSRSV1>|<CCSTMTRS>|<CCACCTFROM>/i.test(txt) || /fatura/.test(semAcento(nome)) ? 'credito' : 'debito';
     return { banco, meio };
   }
@@ -129,7 +140,18 @@
   // Transforma o texto do banco numa descrição legível.
   function descricao(it) {
     const m = (it.memo || '').match(/^([^:"]+):\s*"(.*)"\s*$/);   // formato do Inter: Tipo: "detalhe"
-    if (!m) return /C\/SAL/i.test(it.memo) ? 'Salário' : frase(it.memo || it.nome || 'Sem descrição');
+    if (!m) {
+      if (/C\/SAL/i.test(it.memo)) return 'Salário';
+      const s = String(it.memo || '').match(/^(.+?)\s+-\s+(?:(\d{11}|\d{14})\s+)?(.+?)(?:\s+-\s+[A-Z]{2})?$/);   // Sicredi
+      if (s) {
+        const tipo = semAcento(s[1]), nome = s[3].replace(/^\d{8}\s+/, '').replace(/\s+(ltda|eireli|me|s\.?\s?a\.?)\.?$/i, '');
+        if (/fatura/.test(tipo)) return `Fatura do cartão ${titulo(nome).replace(/\s+de\s+est$/i, '')}`.trim();
+        if (/salario/.test(tipo)) return `Salário: ${titulo(nome)}`;
+        if (/pix/.test(tipo)) return `Pix: ${titulo(nome)}`;
+        return titulo(nome);
+      }
+      return frase(it.memo || it.nome || 'Sem descrição');
+    }
     const tipo = m[1].trim();
     let det = m[2].replace(/^cp\s*:\s*\d+\s*-\s*/i, '').replace(/^no estabelecimento\s+/i, '');
     if (it.estabelecimento) det = it.estabelecimento.replace(/^\d{8}(?=\D)/, '');   // compra: sem a cidade (e sem a raiz do CNPJ)
@@ -188,6 +210,8 @@
       else if (/fatura/.test(texto)) avisos.push('Pagamento de fatura: cuidado para não contar as compras do cartão duas vezes.');
       return { id: 't' + i, origem: it.origem, data: it.data, hora: it.hora || '', valor: it.valor, tipo: it.tipo, bruto: it.bruto, desc, categoria, fixo: false, avisos,
         operacao: op ? op.nome : '', cidade: it.cidade || '', saldoBanco: typeof it.saldoBanco === 'number' ? it.saldoBanco : null,
+        seq: typeof it.seq === 'number' ? it.seq : null, dataCompra: it.dataCompra || '',
+        instituicao: it.tipo === 'receita' && ISPB[it.ispbOrigem] ? ISPB[it.ispbOrigem] : '',
         banco: ctx.banco || '', meio: ctx.meio === 'credito' ? 'credito' : 'debito', estado: antigo ? 'duplicado' : 'pendente', _texto: texto };
     });
 
@@ -209,13 +233,13 @@
   const OPERACOES = [
     [/devolvid|estorn/, 'Devolução', '↩️', 'Reembolso'],
     [/pix no credito|credito liberado/, 'Pix no crédito', '💳', ''],
-    [/pix enviado|pix emitido|pix - enviado/, 'Pix enviado', '⚡', ''],
-    [/pix recebido|pix - recebido/, 'Pix recebido', '⚡', ''],
+    [/pix enviado|pix emitido|pix - enviado|pagamento pix/, 'Pix enviado', '⚡', ''],
+    [/pix recebido|pix - recebido|recebimento pix/, 'Pix recebido', '⚡', ''],
     [/c\/sal|salario|folha de pag/, 'Salário', '💼', 'Salário'],
-    [/compra no debito|compra debito|cartao de debito/, 'Débito', '💳', ''],
+    [/compra no debito|compra debito|cartao de debito|cartao debito/, 'Débito', '💳', ''],
     [/compra no credito|compra a vista|parcela \d|compra parcelada/, 'Crédito', '💳', ''],
     [/fatura/, 'Fatura', '💳', 'Cartão de crédito'],
-    [/pagamento de titulo|pagto titulo|boleto|cobranca/, 'Boleto', '🧾', ''],
+    [/pagamento de titulo|pagto titulo|boleto|cobranca|cod\.? ?barras|codigo de barras/, 'Boleto', '🧾', ''],
     [/cashback|resgate pontos|pontos/, 'Cashback', '🎁', 'Rendimentos'],
     [/pacote de servicos|tarifa|anuidade|\biof\b/, 'Tarifa', '🏦', 'Tarifas bancárias'],
     [/rendimento|juros|remuneracao/, 'Rendimento', '📈', 'Rendimentos'],
@@ -233,6 +257,30 @@
      - CPF/CNPJ completos, quando aparecem (alguns bancos mascaram: ***.123.456-**);
      - raiz do CNPJ (8 dígitos) colada no nome, comum em MEI ("51245806Larissa");
      - no Pix do Inter, "Cp :60701190-" é o código (ISPB) do banco do outro lado. */
+  // Texto com acentos estragados (ex.: "IntegraÃ§Ã£o"): conserta quando dá.
+  function consertar(s) {
+    if (!/Ã[\u0080-\u00bf]/.test(s)) return s;
+    try {
+      const bytes = Uint8Array.from([...s].map(c => { const n = c.charCodeAt(0); if (n > 255) throw 0; return n; }));
+      return new TextDecoder('utf-8', { fatal: true }).decode(bytes);
+    } catch (e) { return s; }
+  }
+  /* Identificador do movimento (Sicredi):
+     - Pix: "E" + código do banco que enviou (8) + data e hora em UTC (AAAAMMDDHHmm) + … → horário (Brasília) e,
+       no Pix recebido, de qual banco veio;
+     - cartão de débito: "TRA-…-AAAAMMDD-…" → dia em que a compra foi feita (o lançamento pode cair depois). */
+  function dadosIdentificador(id) {
+    const out = {};
+    let m = String(id || '').match(/^E(\d{8})(\d{4})(\d{2})(\d{2})(\d{2})(\d{2})/);
+    if (m) {
+      const utc = new Date(Date.UTC(+m[2], +m[3] - 1, +m[4], +m[5], +m[6]));
+      const br = new Date(utc.getTime() - 3 * 3600e3);   // Brasília (sem horário de verão desde 2019)
+      out.hora = `${String(br.getUTCHours()).padStart(2, '0')}:${String(br.getUTCMinutes()).padStart(2, '0')}`;
+      out.ispbOrigem = m[1];
+    }
+    if ((m = String(id || '').match(/^TRA-\d+-(\d{4})(\d{2})(\d{2})-/))) out.dataCompra = `${m[1]}-${m[2]}-${m[3]}`;
+    return out;
+  }
   const ISPB = { '00000000': 'Banco do Brasil', '00360305': 'Caixa', '00416968': 'Inter', '60701190': 'Itaú', '60746948': 'Bradesco',
     '90400888': 'Santander', '18236120': 'Nubank', '31872495': 'C6 Bank', '10573521': 'Mercado Pago', '22896431': 'PicPay',
     '08561701': 'PagBank', '92702067': 'Banrisul', '01181521': 'Sicredi', '02038232': 'Sicoob' };
@@ -244,6 +292,7 @@
     if (m) out.documento = 'CNPJ ' + fmtCNPJ(m[1].replace(/\D/g, ''));
     if (!out.documento && (m = t.match(/(\*{3}\.\d{3}\.\d{3}-\*{2})/))) out.documento = 'CPF ' + m[1];
     if (!out.documento && (m = t.match(/\b(\d{3}\.\d{3}\.\d{3}-\d{2})\b/))) out.documento = 'CPF ' + m[1];
+    if (!out.documento && (m = t.match(/\s-\s+(\d{11})\s+\S/))) out.documento = 'CPF ' + fmtCPF(m[1]);
     if (!out.documento && (m = t.match(/\b(\d{8})(?=[A-Za-zÀ-ú])/)) && !/cp\s*:\s*$/i.test(t.slice(0, m.index))) out.documento = `CNPJ ${m[1].slice(0, 2)}.${m[1].slice(2, 5)}.${m[1].slice(5)}/…`;
     if ((m = t.match(/cp\s*:\s*(\d{8})\s*-/i))) { if (ISPB[m[1]]) out.instituicao = ISPB[m[1]]; }
     return out;

@@ -68,7 +68,11 @@ PWA em JavaScript puro (sem framework, sem build) para finanças pessoais e plan
   em que o extrato foi gerado; vão para `ui.triagem.meta` e para cada lançamento (`loteAgencia`, `loteConta`,
   `loteSaldo`, `loteSaldoData`, `loteGerado`). Por movimento: `operacao` (Pix, Débito, Boleto, Tarifa… —
   `Extrato.operacao`, também sugere categoria), `cidade` (compra no débito do Inter: NAME em colunas fixas
-  22/13/3) e `saldoBanco` (coluna Saldo do Bradesco). O Bradesco é reconhecido pelo formato do CSV.
+  22/13/3) e `saldoBanco` (coluna Saldo do Bradesco/Sicredi). Bradesco e Sicredi são reconhecidos pelo formato do CSV.
+  Sicredi (CSV `Data;Descricao;CodTransacao;Identificador;Tipo;Valor;Saldo`, do mais novo para o mais antigo):
+  descrição "TIPO - [CPF/CNPJ] NOME [- BR]"; `Identificador` vira a `origem` e dá o horário do Pix (ID E2E em UTC →
+  Brasília), o banco de quem mandou o Pix recebido (`instituicao`) e o dia da compra no cartão (`dataCompra`).
+  `seq` guarda a ordem real dos movimentos do arquivo (a Conta corrente usa para o saldo do dia bater).
   Conta corrente usa o último saldo informado pelo banco como referência (✓ bate / ⚠️ difere) e
   `outroLado()` liga "PIX ENVIADO" sem nome ao mesmo valor recebido em outra conta no mesmo dia.
   Saídas aparecem em vermelho (CSS em `.mov-val`), transferências entre contas em cinza. Não versionar extratos reais; os testes usam

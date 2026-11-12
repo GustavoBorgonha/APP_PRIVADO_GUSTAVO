@@ -506,7 +506,9 @@ function linhaDetalhes(x) {
   if (op) partes.push(`<span class="op-tag">${op.emoji} ${esc(op.nome)}</span>`);
   if (x.cidade) partes.push(`📍 ${esc(x.cidade)}`);
   if (d.documento) partes.push(`🪪 ${esc(d.documento)}`);
-  if (d.instituicao) partes.push(`🏦 ${x.tipo === 'receita' ? 'veio do' : 'foi para o'} ${esc(d.instituicao)}`);
+  const inst = d.instituicao || x.instituicao;
+  if (inst) partes.push(`🏦 ${x.tipo === 'receita' ? 'veio do' : 'foi para o'} ${esc(inst)}`);
+  if (x.dataCompra && x.dataCompra !== x.data) partes.push(`🛒 compra em ${fmtData(x.dataCompra)}`);
   const par = outroLado(x);
   if (par) partes.push(`${x.tipo === 'receita' ? '⬅️ veio de' : '➡️ foi para'} ${esc(par.desc)}${rotuloOrigem(par) ? ' (' + esc(rotuloOrigem(par)) + ')' : ''}`);
   return partes.length ? `<small class="mov-det">${partes.join(' · ')}</small>` : '';
@@ -517,9 +519,10 @@ function confirmarItem(i) {
   const t = ui.triagem, desc = String(i.desc || '').trim(), valor = Math.abs(parseValor(i.valor));
   const l = { id: uid(), tipo: i.tipo, desc, categoria: String(i.categoria || '').trim() || 'Outros', valor, data: i.data, fixo: !!i.fixo,
     origem: i.origem, banco: t.banco, meio: t.meio, titular: t.titular || '', bruto: i.bruto || '', hora: i.hora || '',
-    operacao: i.operacao || '', cidade: i.cidade || '',
+    operacao: i.operacao || '', cidade: i.cidade || '', instituicao: i.instituicao || '', dataCompra: i.dataCompra || '',
     lote: t.lote, loteArquivo: t.arquivo, loteEm: t.em };
-  if (typeof i.saldoBanco === 'number') l.saldoBanco = i.saldoBanco;   // saldo depois do movimento, como o banco informou
+  if (typeof i.saldoBanco === 'number') l.saldoBanco = i.saldoBanco;
+  if (typeof i.seq === 'number') l.seq = i.seq;   // ordem real dentro do extrato (para o saldo do dia bater)   // saldo depois do movimento, como o banco informou
   // Dados gerais do extrato (agência, conta, saldo final, quando foi gerado), para a conta corrente e o histórico.
   const m = t.meta || {};
   if (m.agencia) l.loteAgencia = m.agencia;
