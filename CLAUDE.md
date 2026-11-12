@@ -10,7 +10,7 @@ PWA em JavaScript puro (sem framework, sem build) para finanças pessoais e plan
   Netlify em novembro/2026 por causa do limite de créditos do plano grátis.
 - **Login e dados:** Firebase (projeto `projetogustavoapp-88b20`): login Google + Cloud Firestore.
   - Coleções: `lancamentos`, `planos` (dados compartilhados entre os usuários autorizados),
-    `triagens` (triagem de extrato em andamento) e
+    `triagens` (triagem de extrato em andamento), `categorias` (categorias criadas/editadas) e
     `acesso/permitidos` (campo `emails`: lista de quem pode entrar, editada só pelo console).
   - Regras em `firestore.rules`. Se mudarem, o Gustavo precisa colar no console do Firebase
     (aba Regras) — não há deploy automático das regras.
