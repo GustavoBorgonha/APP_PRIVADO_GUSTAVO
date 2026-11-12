@@ -63,7 +63,15 @@ PWA em JavaScript puro (sem framework, sem build) para finanças pessoais e plan
   Detalhes nos cartões (triagem e revisão): `hora` (só se o OFX trouxer DTPOSTED/DTUSER com horário; o Inter
   não traz) e `Extrato.detalhes(bruto)`: CPF/CNPJ que aparecer no texto, raiz do CNPJ colada no nome (MEI) e
   banco do outro lado do Pix pelo código ISPB em "Cp :XXXXXXXX-" (tabela `ISPB`). O extrato do Inter não traz
-  o CPF/CNPJ da outra parte. Não versionar extratos reais; os testes usam
+  o CPF/CNPJ da outra parte.
+  Dados do arquivo (`lerOFX`/`lerCSVBanco` devolvem `itens.meta`): agência, conta, saldo final (+data) e data/hora
+  em que o extrato foi gerado; vão para `ui.triagem.meta` e para cada lançamento (`loteAgencia`, `loteConta`,
+  `loteSaldo`, `loteSaldoData`, `loteGerado`). Por movimento: `operacao` (Pix, Débito, Boleto, Tarifa… —
+  `Extrato.operacao`, também sugere categoria), `cidade` (compra no débito do Inter: NAME em colunas fixas
+  22/13/3) e `saldoBanco` (coluna Saldo do Bradesco). O Bradesco é reconhecido pelo formato do CSV.
+  Conta corrente usa o último saldo informado pelo banco como referência (✓ bate / ⚠️ difere) e
+  `outroLado()` liga "PIX ENVIADO" sem nome ao mesmo valor recebido em outra conta no mesmo dia.
+  Saídas aparecem em vermelho (CSS em `.mov-val`), transferências entre contas em cinza. Não versionar extratos reais; os testes usam
   extratos de mentira.
 - `revisao.js` — duas telas internas abertas por Finanças: **Revisar categoria** (`vRevisao`, aba `revisao`):
   período + categoria → cartões estilo triagem para trocar categoria/descrição e confirmar ou pular; sugere

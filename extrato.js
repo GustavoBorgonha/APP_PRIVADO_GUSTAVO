@@ -17,9 +17,26 @@
   /* ---------- leitura dos arquivos ---------- */
 
   // OFX: cada movimento fica num bloco <STMTTRN>.
+  // Compra no débito do Inter: o NAME vem em colunas fixas (estabelecimento 22 · cidade 13 · país 3).
+  function estabelecimentoECidade(nome) {
+    const m = String(nome || '').replace(/\s+$/, '').match(/^(.{22})(.{13})([A-Za-z]{3})$/);
+    if (!m || !/\S/.test(m[2])) return null;
+    return { estabelecimento: m[1].trim(), cidade: titulo(m[2].trim()), pais: m[3] };
+  }
+  const isoDe = d => /^\d{8}/.test(d) ? `${d.slice(0, 4)}-${d.slice(4, 6)}-${d.slice(6, 8)}` : '';
+  const horaDe = d => /^\d{12}/.test(d) && d.slice(8, 14) !== '000000' && d.slice(8, 12) !== '1200' ? `${d.slice(8, 10)}:${d.slice(10, 12)}` : '';
+
   function lerOFX(txt) {
     const campo = (bloco, tag) => { const m = bloco.match(new RegExp('<' + tag + '>([^<\\r\\n]*)', 'i')); return m ? m[1].trim() : ''; };
     const itens = [];
+    // Dados gerais do extrato: agência, conta, saldo final e quando o arquivo foi gerado.
+    const bal = (txt.match(/<LEDGERBAL>([\s\S]*?)<\/LEDGERBAL>/i) || [])[1] || '';
+    const servidor = campo(txt, 'DTSERVER');
+    itens.meta = {
+      agencia: campo(txt, 'BRANCHID'), conta: campo(txt, 'ACCTID'), bancoCodigo: campo(txt, 'BANKID'),
+      saldoFinal: bal ? parseFloat(campo(bal, 'BALAMT').replace(',', '.')) : null, saldoData: isoDe(campo(bal, 'DTASOF')),
+      geradoEm: isoDe(servidor), geradoHora: horaDe(servidor),
+    };
     txt.split(/<STMTTRN>/i).slice(1).forEach(parte => {
       const b = parte.split(/<\/STMTTRN>/i)[0];
       const d = campo(b, 'DTPOSTED'), v = parseFloat(campo(b, 'TRNAMT').replace(',', '.'));
@@ -28,11 +45,13 @@
       // Horário: alguns bancos mandam data+hora (AAAAMMDDHHMMSS). O Inter manda só a data.
       const dh = /^\d{12}/.test(campo(b, 'DTUSER')) ? campo(b, 'DTUSER') : d;
       const hora = /^\d{12}/.test(dh) && dh.slice(8, 14) !== '000000' && dh.slice(8, 12) !== '1200' ? `${dh.slice(8, 10)}:${dh.slice(10, 12)}` : '';
+      const ec = /compra/i.test(memo) ? estabelecimentoECidade(nome) : null;
       itens.push({
         origem: 'ofx:' + (campo(b, 'FITID') || `${d}|${v}|${memo}`),
         data: `${d.slice(0, 4)}-${d.slice(4, 6)}-${d.slice(6, 8)}`,
         valor: Math.abs(v), tipo: v < 0 ? 'despesa' : 'receita',
         bruto: memo || nome, memo, nome, hora,
+        cidade: ec ? ec.cidade : '', estabelecimento: ec ? ec.estabelecimento : '',
       });
     });
     return itens;
@@ -42,13 +61,16 @@
   // Na fatura do cartão (opc.meio === 'credito') com uma coluna só de valor, compra vem positiva: vira despesa.
   function lerCSVBanco(txt, opc = {}) {
     const itens = [], vistos = {};
+    const ag = txt.match(/Ag:\s*([\d-]+)\s*\|\s*Conta:\s*([\d-]+)/i);
+    const base = txt.match(/base\s+(\d{2}\/\d{2}\/\d{4})\s+(?:às|as|a)\s+(\d{2}:\d{2})/i);
+    itens.meta = { agencia: ag ? ag[1] : '', conta: ag ? ag[2] : '', geradoEm: base ? g.parseData(base[1]) : '', geradoHora: base ? base[2] : '', saldoFinal: null, saldoData: '' };
     let cab = null;
     g.lerCSV(txt).forEach(r => {
       const n = r.map(c => semAcento(c).trim());
       const acha = (...ini) => n.findIndex(c => ini.some(i => c.startsWith(i)));
       if (n.includes('data') && acha('credito', 'debito', 'valor') >= 0) {
         cab = { data: n.indexOf('data'), hist: acha('historico', 'descricao', 'lancamento', 'estabelecimento', 'titulo'), doc: acha('docto', 'documento'),
-          cred: acha('credito'), deb: acha('debito'), valor: acha('valor'), tipo: n.indexOf('tipo'), cat: acha('categ') };
+          cred: acha('credito'), deb: acha('debito'), valor: acha('valor'), tipo: n.indexOf('tipo'), cat: acha('categ'), saldo: acha('saldo') };
         return;
       }
       if (!cab) return;
@@ -64,7 +86,11 @@
       let origem = `csv:${data}|${doc}|${v.toFixed(2)}|${semAcento(hist)}`;
       vistos[origem] = (vistos[origem] || 0) + 1;
       if (vistos[origem] > 1) origem += '#' + vistos[origem];
-      itens.push({ origem, data, valor: Math.abs(v), tipo, bruto: hist, memo: hist, nome: '', categoriaArquivo: cab.cat >= 0 ? (r[cab.cat] || '').trim() : '' });
+      // Saldo depois do movimento, quando o banco manda (Bradesco manda).
+      const saldoTxt = cab.saldo >= 0 ? String(r[cab.saldo] || '').trim() : '';
+      const saldoBanco = /\d/.test(saldoTxt) ? g.parseValor(saldoTxt) : null;
+      if (saldoBanco !== null) { itens.meta.saldoFinal = saldoBanco; itens.meta.saldoData = data; }
+      itens.push({ origem, data, valor: Math.abs(v), tipo, bruto: hist, memo: hist, nome: '', saldoBanco, categoriaArquivo: cab.cat >= 0 ? (r[cab.cat] || '').trim() : '' });
     });
     return itens;
   }
@@ -82,7 +108,9 @@
     const pista = semAcento(`${tag('ORG')} ${nome} ${txt.slice(0, 300)}`);
     const porNome = [['intermedium', 'Inter'], ['banco inter', 'Inter'], ['nubank', 'Nubank'], ['nu pagamentos', 'Nubank'], ['bradesco', 'Bradesco'], ['itau', 'Itaú'],
       ['banco do brasil', 'Banco do Brasil'], ['caixa economica', 'Caixa'], ['santander', 'Santander'], ['sicredi', 'Sicredi'], ['sicoob', 'Sicoob']].find(([p]) => pista.includes(p));
-    const banco = CODIGOS[tag('BANKID').padStart(3, '0')] || CODIGOS[tag('FID').padStart(3, '0')] || (porNome ? porNome[1] : '');
+    // CSV do Bradesco não diz o banco, mas tem um formato próprio: "Extrato de: Ag: … | Conta: …" + Docto. + Saldo.
+    const bradesco = /Extrato de:\s*Ag:/i.test(txt) && /Docto\./i.test(txt) && /Saldo \(R\$\)/i.test(txt) ? 'Bradesco' : '';
+    const banco = CODIGOS[tag('BANKID').padStart(3, '0')] || CODIGOS[tag('FID').padStart(3, '0')] || (porNome ? porNome[1] : '') || bradesco;
     const meio = /<CREDITCARDMSGSRSV1>|<CCSTMTRS>|<CCACCTFROM>/i.test(txt) || /fatura/.test(semAcento(nome)) ? 'credito' : 'debito';
     return { banco, meio };
   }
@@ -104,7 +132,8 @@
     if (!m) return /C\/SAL/i.test(it.memo) ? 'Salário' : frase(it.memo || it.nome || 'Sem descrição');
     const tipo = m[1].trim();
     let det = m[2].replace(/^cp\s*:\s*\d+\s*-\s*/i, '').replace(/^no estabelecimento\s+/i, '');
-    if (/^\d/.test(det) && it.nome) det = it.nome;              // "00019 491964005 FULANO" → usa o nome
+    if (it.estabelecimento) det = it.estabelecimento.replace(/^\d{8}(?=\D)/, '');   // compra: sem a cidade (e sem a raiz do CNPJ)
+    else if (/^\d/.test(det) && it.nome) det = it.nome;              // "00019 491964005 FULANO" → usa o nome
     det = det.replace(/\s+(ltda|eireli|me|s\.?\s?a\.?)\.?$/i, '').replace(/\s+(ltda|eireli|me|s\.?\s?a\.?)\.?$/i, '');
     det = titulo(det || tipo);
     return /^pix/i.test(tipo) ? `Pix: ${det}` : det;
@@ -151,12 +180,14 @@
       const desc = antigo ? antigo.desc : descricao(it);
       const regras = it.tipo === 'receita' ? REGRAS_RECEITA : REGRAS_DESPESA;
       const proprio = meuNome && meuNome.every(p => texto.includes(p));   // seu nome no movimento
-      const categoria = (antigo && antigo.categoria) || (proprio || RE_TRANSF.test(texto) ? TRANSF : '') || conhecidas.get(semAcento(it.categoriaArquivo)) || aprendido.get(semAcento(desc)) || (regras.find(([re]) => re.test(texto)) || [])[1] || 'Outros';
+      const op = operacao(`${it.memo} ${it.nome}`);
+      const categoria = (antigo && antigo.categoria) || (proprio || RE_TRANSF.test(texto) ? TRANSF : '') || conhecidas.get(semAcento(it.categoriaArquivo)) || aprendido.get(semAcento(desc)) || (regras.find(([re]) => re.test(texto)) || [])[1] || (op && op.categoria) || 'Outros';
       const avisos = [];
       if (proprio) avisos.push('Seu nome aparece no movimento: sugeri "Transferência entre contas", que não entra no saldo.');
       if (ctx.meio === 'credito' && it.tipo === 'receita' && /pagamento|pagto/.test(texto)) avisos.push('Pagamento da fatura: normalmente se ignora aqui, porque as compras já estão lançadas uma a uma.');
       else if (/fatura/.test(texto)) avisos.push('Pagamento de fatura: cuidado para não contar as compras do cartão duas vezes.');
       return { id: 't' + i, origem: it.origem, data: it.data, hora: it.hora || '', valor: it.valor, tipo: it.tipo, bruto: it.bruto, desc, categoria, fixo: false, avisos,
+        operacao: op ? op.nome : '', cidade: it.cidade || '', saldoBanco: typeof it.saldoBanco === 'number' ? it.saldoBanco : null,
         banco: ctx.banco || '', meio: ctx.meio === 'credito' ? 'credito' : 'debito', estado: antigo ? 'duplicado' : 'pendente', _texto: texto };
     });
 
@@ -171,6 +202,31 @@
     });
     out.forEach(o => delete o._texto);
     return out.sort((a, b) => b.data.localeCompare(a.data));
+  }
+
+  /* Tipo de operação (Pix, débito, boleto, tarifa…), tirado do texto do banco.
+     Também sugere uma categoria quando o histórico e as regras não dizem nada. */
+  const OPERACOES = [
+    [/devolvid|estorn/, 'Devolução', '↩️', 'Reembolso'],
+    [/pix no credito|credito liberado/, 'Pix no crédito', '💳', ''],
+    [/pix enviado|pix emitido|pix - enviado/, 'Pix enviado', '⚡', ''],
+    [/pix recebido|pix - recebido/, 'Pix recebido', '⚡', ''],
+    [/c\/sal|salario|folha de pag/, 'Salário', '💼', 'Salário'],
+    [/compra no debito|compra debito|cartao de debito/, 'Débito', '💳', ''],
+    [/compra no credito|compra a vista|parcela \d|compra parcelada/, 'Crédito', '💳', ''],
+    [/fatura/, 'Fatura', '💳', 'Cartão de crédito'],
+    [/pagamento de titulo|pagto titulo|boleto|cobranca/, 'Boleto', '🧾', ''],
+    [/cashback|resgate pontos|pontos/, 'Cashback', '🎁', 'Rendimentos'],
+    [/pacote de servicos|tarifa|anuidade|\biof\b/, 'Tarifa', '🏦', 'Tarifas bancárias'],
+    [/rendimento|juros|remuneracao/, 'Rendimento', '📈', 'Rendimentos'],
+    [/\bted\b|\bdoc\b|transf/, 'Transferência', '🔁', ''],
+    [/recebimento fornecedor|credito em conta|deposito/, 'Recebimento', '📥', ''],
+    [/saque/, 'Saque', '🏧', ''],
+  ];
+  function operacao(texto) {
+    const t = semAcento(texto);
+    const o = OPERACOES.find(op => semAcento(op[1]) === t.trim()) || OPERACOES.find(([re]) => re.test(t));   // nome já salvo ou texto do banco
+    return o ? { nome: o[1], emoji: o[2], categoria: o[3] } : null;
   }
 
   /* Detalhes que dá para tirar do texto do banco (não vêm em campo próprio no extrato):
@@ -193,5 +249,5 @@
     return out;
   }
 
-  g.Extrato = { detalhes, decodificar, lerOFX, lerCSVBanco, lerArquivo, detectar, preparar, descricao, BANCOS };
+  g.Extrato = { operacao, estabelecimentoECidade, detalhes, decodificar, lerOFX, lerCSVBanco, lerArquivo, detectar, preparar, descricao, BANCOS };
 })(typeof window !== 'undefined' ? window : globalThis);

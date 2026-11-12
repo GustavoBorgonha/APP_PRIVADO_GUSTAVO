@@ -298,6 +298,32 @@ async function importacaoExtrato(navegador, url, erros) {
   const armazem = l.find(x => x.valor === 50);
   confere(armazem && armazem.categoria === 'Mercado' && l.some(x => x.valor === 30 && x.categoria === 'Outros'), 'triagem automática redistribui a categoria pelo histórico e confirma');
   confere(!l.some(x => x.valor === 20) && await p.locator('.tri').count() === 1 && await p.isVisible('.tri:has-text("ACADEMIA")'), 'estorno é ignorado e o valor já lançado fica para revisar');
+
+  // Dados gerais e detalhes: Bradesco (agência/conta, saldo por movimento, data do extrato) e Inter (cidade, saldo final).
+  await p.click('[data-a=cancelarImportacao]');
+  await importar('brad.csv', `Extrato de: Ag: 367 | Conta: 64163-4;;;;;
+Data;Histórico;Docto.;Crédito (R$);Débito (R$);Saldo (R$)
+05/05/2026;TRANSF SALDO C/SAL P/CC;500367;1.000,00; ;1.100,00
+06/05/2026;PACOTE DE SERVICOS;11225; ;18,65;1.081,35
+;;;;;
+Os dados acima tem como base 10/05/2026 às 23:10 e estão sujeitos a alterações.;;;;;`, '', 'debito', 'Gustavo');
+  confere((await p.textContent('.sub')).includes('Ag 367 · Conta 64163-4') && (await p.textContent('.sub')).includes('às 23:10'), 'Bradesco: mostra agência, conta, saldo final e data/hora do extrato');
+  confere((await p.textContent('.selo')).includes('Bradesco'), 'Bradesco é reconhecido pelo formato do arquivo');
+  confere((await p.textContent('.tri:has-text("PACOTE")')).includes('Tarifa') && await cartao('PACOTE').locator('[data-f=categoria]').inputValue() === 'Tarifas bancárias', 'tipo de operação aparece e puxa a categoria');
+  await p.click('[data-a=triAuto]'); await p.click('dialog >> text=Fazer triagem automática');
+  await p.click('.nav >> text=Finanças'); await p.click('text=🏦 Conta corrente');
+  await p.click('.cc-contas >> text=Bradesco');
+  await p.click('[data-a=contaTudo]');
+  confere((await p.textContent('.hero .saldo-val')).replace(/\s/g, ' ').includes('1.081,35') && await p.isVisible('text=Conferido com o banco'), 'conta corrente segue o saldo informado pelo banco');
+  confere(await p.locator('.cc-saldo:has-text("✓")').count() === 2, 'cada movimento mostra ✓ quando bate com o saldo do banco');
+  await p.click('[data-a=contaTudo]');
+  await p.click('.nav >> text=Extratos');
+  await importar('inter.ofx', `<OFX><BANKACCTFROM><BANKID>077</BANKID><BRANCHID>0001-9</BRANCHID><ACCTID>999</ACCTID></BANKACCTFROM><BANKTRANLIST>
+<STMTTRN><TRNTYPE>PAYMENT</TRNTYPE><DTPOSTED>20260509</DTPOSTED><TRNAMT>-18.00</TRNAMT><FITID>C1</FITID>
+<MEMO>Compra no debito: "No estabelecimento Heitorcezar"</MEMO><NAME>Heitorcezar           Rio Do Sul   Bra</NAME></STMTTRN></BANKTRANLIST>
+<LEDGERBAL><BALAMT>2.34</BALAMT><DTASOF>20260510</DTASOF></LEDGERBAL></OFX>`, 'Inter');
+  confere((await p.textContent('.tri:has-text("Heitorcezar")')).includes('📍 Rio do Sul') && (await p.textContent('.sub')).includes('saldo final R$'), 'Inter: mostra a cidade da compra e o saldo final do extrato');
+  confere(await cartao('Heitorcezar').locator('[data-f=desc]').inputValue() === 'Heitorcezar', 'descrição da compra fica só com o estabelecimento');
   await p.click('[data-a=cancelarImportacao]');
 
   // Detalhes: horário (quando o banco manda) e CPF/CNPJ ou banco do Pix tirados do texto.

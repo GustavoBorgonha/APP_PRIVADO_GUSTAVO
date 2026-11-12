@@ -314,7 +314,7 @@ function itemExtrato(x, opc = {}) {
   return `<div class="mov" data-a="editarLanc" data-v="${x.id}" role="button" tabindex="0" title="Editar">
     <span class="mov-ic ${x.tipo}">${iconeCat(x.categoria, x.tipo)}</span>
     <span class="mov-txt"><strong>${esc(x.desc)}${x.fixo ? ' <span class="fixo" title="Lançamento fixo">🔁</span>' : ''}</strong>
-      <small>${esc(x.categoria)}${opc.data ? ' · ' + fmtData(x.data).slice(0, 5) : ''}${rotuloOrigem(x) ? ' · ' + esc(rotuloOrigem(x)) : ''}</small></span>
+      <small>${esc(x.categoria)}${opc.data ? ' · ' + fmtData(x.data).slice(0, 5) : ''}${x.cidade ? ' · 📍 ' + esc(x.cidade) : ''}${rotuloOrigem(x) ? ' · ' + esc(rotuloOrigem(x)) : ''}</small></span>
     <span class="mov-val ${ehTransf(x) ? 'transf' : x.tipo === 'receita' ? 'pos' : ''}" ${ehTransf(x) ? 'title="Transferência: não entra no saldo"' : ''}>${x.tipo === 'receita' ? '+' : '−'} ${din(x.valor)}</span>
     ${opc.apagar ? `<button class="x" data-a="apagarLanc" data-v="${x.id}" title="Apagar" aria-label="Apagar lançamento">✕</button>` : ''}
   </div>`;
@@ -492,11 +492,23 @@ function cartaoTriagem(i) {
   </div>`;
 }
 
-// Linha com o que dá para saber além do texto: horário, CPF/CNPJ e banco do outro lado do Pix.
+// Tipo de operação do movimento (Pix, débito, boleto…), guardado ou tirado do texto do banco.
+const operacaoDe = x => x.operacao ? (Extrato.operacao(x.operacao) || { nome: x.operacao, emoji: '•' }) : x.bruto ? Extrato.operacao(x.bruto) : null;
+// Pix/transferência sem nome (o Bradesco só diz "PIX ENVIADO"): procura o mesmo valor, no mesmo dia, em outra conta.
+function outroLado(x) {
+  if (!/^\s*(pix (enviado|recebido)|transf[^"]*)\s*$/i.test(x.bruto || '')) return null;
+  const valor = Math.abs(parseValor(x.valor)), oposto = x.tipo === 'receita' ? 'despesa' : 'receita';
+  return db.lancamentos.find(l => l.tipo === oposto && l.data === x.data && Math.abs(l.valor - valor) < 0.005 && (l.banco || '') !== (x.banco || ''));
+}
+// Linha com o que dá para saber além do texto: tipo de operação, cidade, CPF/CNPJ e o outro lado do Pix.
 function linhaDetalhes(x) {
-  const d = Extrato.detalhes(x.bruto), partes = [];
+  const d = Extrato.detalhes(x.bruto), op = operacaoDe(x), partes = [];
+  if (op) partes.push(`<span class="op-tag">${op.emoji} ${esc(op.nome)}</span>`);
+  if (x.cidade) partes.push(`📍 ${esc(x.cidade)}`);
   if (d.documento) partes.push(`🪪 ${esc(d.documento)}`);
   if (d.instituicao) partes.push(`🏦 ${x.tipo === 'receita' ? 'veio do' : 'foi para o'} ${esc(d.instituicao)}`);
+  const par = outroLado(x);
+  if (par) partes.push(`${x.tipo === 'receita' ? '⬅️ veio de' : '➡️ foi para'} ${esc(par.desc)}${rotuloOrigem(par) ? ' (' + esc(rotuloOrigem(par)) + ')' : ''}`);
   return partes.length ? `<small class="mov-det">${partes.join(' · ')}</small>` : '';
 }
 
@@ -505,7 +517,15 @@ function confirmarItem(i) {
   const t = ui.triagem, desc = String(i.desc || '').trim(), valor = Math.abs(parseValor(i.valor));
   const l = { id: uid(), tipo: i.tipo, desc, categoria: String(i.categoria || '').trim() || 'Outros', valor, data: i.data, fixo: !!i.fixo,
     origem: i.origem, banco: t.banco, meio: t.meio, titular: t.titular || '', bruto: i.bruto || '', hora: i.hora || '',
+    operacao: i.operacao || '', cidade: i.cidade || '',
     lote: t.lote, loteArquivo: t.arquivo, loteEm: t.em };
+  if (typeof i.saldoBanco === 'number') l.saldoBanco = i.saldoBanco;   // saldo depois do movimento, como o banco informou
+  // Dados gerais do extrato (agência, conta, saldo final, quando foi gerado), para a conta corrente e o histórico.
+  const m = t.meta || {};
+  if (m.agencia) l.loteAgencia = m.agencia;
+  if (m.conta) l.loteConta = m.conta;
+  if (typeof m.saldoFinal === 'number') { l.loteSaldo = m.saldoFinal; l.loteSaldoData = m.saldoData || ''; }
+  if (m.geradoEm) l.loteGerado = m.geradoEm + (m.geradoHora ? ' ' + m.geradoHora : '');
   db.lancamentos.push(l);
   Object.assign(i, { estado: 'ok', lancId: l.id, desc, valor, categoria: l.categoria });
 }
@@ -615,6 +635,7 @@ function vTriagem() {
       <div><button class="btn mini voltar" data-a="sairTriagem" title="A triagem fica salva para continuar depois">${IC.voltar} Extratos</button>
         <h1 style="margin-top:10px">Triagem do extrato</h1>
         <p class="sub" style="margin:0"><span class="selo">${esc(t.banco)} · ${t.meio === 'credito' ? 'cartão de crédito' : 'conta (débito)'}${t.titular ? ' · ' + esc(t.titular) : ''}</span>
+          ${infoExtrato(t.meta || {})}
           ${esc(t.arquivo)} · nada entra nas suas finanças sem você confirmar.</p></div>
       <div class="acoes">${pend.length ? '<button class="btn pri" data-a="triAuto">⚡ Triagem automática</button>' : ''}
         <button class="btn perigo" data-a="cancelarImportacao">Cancelar importação</button></div>
@@ -680,13 +701,15 @@ async function importarExtrato() {
       const lembrar = { ...ultimo, ...opc, titulares: { ...(ultimo.titulares || {}), [`${opc.banco}|${opc.meio}`]: opc.titular } };
       localStorage.setItem('apg-extrato', JSON.stringify(lembrar));
     } catch (e) { /* sem armazenamento */ }
-    let itens = [];
+    let itens = [], meta = {};
     try {
-      itens = Extrato.preparar(Extrato.lerArquivo(arq.nome, arq.texto, opc), { ...opc, lancamentos: db.lancamentos, meuNome: App.usuario?.nome,
+      const lidos = Extrato.lerArquivo(arq.nome, arq.texto, opc);
+      meta = lidos.meta || {};
+      itens = Extrato.preparar(lidos, { ...opc, lancamentos: db.lancamentos, meuNome: App.usuario?.nome,
         categorias: listaCategorias().map(c => c.nome) });
     } catch (e) { console.error(e); }
     if (!itens.length) return alert('Não encontrei lançamentos neste arquivo. Use o extrato em OFX ou CSV baixado do seu banco.');
-    ui.triagem = { arquivo: arq.nome, ...opc, itens, lote: uid(), em: hoje() };
+    ui.triagem = { arquivo: arq.nome, ...opc, itens, lote: uid(), em: hoje(), meta };
     ui.naTriagem = true; ui.aba = 'extratos'; ui.plano = null;
   });
 }
@@ -763,11 +786,22 @@ function vPlano(p) {
       <textarea rows="4" data-c="notas" data-p="${p.id}" placeholder="Ideias, links, contatos de fornecedores…">${esc(p.notas || '')}</textarea></div>`;
 }
 
+// Agência/conta, saldo final e quando o extrato foi gerado (o que o arquivo trouxer).
+function infoExtrato(m) {
+  const p = [];
+  if (m.agencia || m.conta) p.push(`Ag ${esc(m.agencia || '—')} · Conta ${esc(m.conta || '—')}`);
+  if (typeof m.saldoFinal === 'number') p.push(`saldo final ${din(m.saldoFinal)}${m.saldoData ? ' em ' + fmtData(m.saldoData) : ''}`);
+  const gerado = m.gerado || (m.geradoEm ? m.geradoEm + (m.geradoHora ? ' ' + m.geradoHora : '') : '');
+  if (gerado) p.push(`gerado em ${fmtData(gerado.slice(0, 10))}${gerado.length > 10 ? ' às ' + gerado.slice(11) : ''}`);
+  return p.length ? `<span class="info-ext">${p.join(' · ')}</span>` : '';
+}
+
 // Importações de extrato já feitas (agrupadas pelo "lote"), com opção de desfazer a importação inteira.
 function lotesImportados() {
   const m = new Map();
   db.lancamentos.filter(l => l.lote).forEach(l => {
-    const g = m.get(l.lote) || { id: l.lote, arquivo: l.loteArquivo || 'Extrato', em: l.loteEm || '', banco: l.banco, meio: l.meio, titular: l.titular, itens: [] };
+    const g = m.get(l.lote) || { id: l.lote, arquivo: l.loteArquivo || 'Extrato', em: l.loteEm || '', banco: l.banco, meio: l.meio, titular: l.titular, itens: [],
+      meta: { agencia: l.loteAgencia, conta: l.loteConta, saldoFinal: l.loteSaldo, saldoData: l.loteSaldoData, gerado: l.loteGerado } };
     g.itens.push(l); m.set(l.lote, g);
   });
   return [...m.values()].sort((a, b) => (b.em || '').localeCompare(a.em || ''));
@@ -802,7 +836,7 @@ function vExtratos() {
         <div class="lote-cab" data-a="abrirLote" data-v="${g.id}" role="button" tabindex="0" aria-expanded="${aberto}">
           <span class="mov-ic">${g.meio === 'credito' ? '💳' : '🏦'}</span>
           <span class="mov-txt"><strong>${esc(g.banco || 'Banco não informado')} · ${meioRot(g.meio)}${g.titular ? ` <span class="titular">${esc(g.titular)}</span>` : ''}</strong>
-            <small>${esc(g.arquivo)}</small>
+            <small>${esc(g.arquivo)}</small>${infoExtrato(g.meta) ? `<small>${infoExtrato(g.meta)}</small>` : ''}
             <small>${fmtData(datas[0])} a ${fmtData(datas[datas.length - 1])}${g.em ? ' · importado em ' + fmtData(g.em) : ''}</small></span>
           <span class="lote-num"><b>${g.itens.length}</b><small>${g.itens.length === 1 ? 'lançamento' : 'lançamentos'}</small></span>
           <span class="lote-seta">${IC.seta}</span>
@@ -1161,6 +1195,7 @@ function modalLanc(l, tipoInicial) {
   l = l || { tipo: tipoInicial === 'receita' ? 'receita' : 'despesa', desc: '', categoria: '', valor: '', data: ui.aba === 'financas' && ui.mes !== mesAtual() ? ui.mes + '-01' : hoje(), fixo: false };
   abrirModal(`
     <h2>${novo ? 'Novo lançamento' : 'Editar lançamento'}</h2>
+    ${!novo && l.bruto ? `<div class="lanc-orig"><small class="muted">No extrato${l.hora ? ' · ' + l.hora : ''}${rotuloOrigem(l) ? ' · ' + esc(rotuloOrigem(l)) : ''}</small><span>${esc(l.bruto)}</span>${linhaDetalhes(l)}</div>` : ''}
     <form class="form" data-f="modal">
       <label>Tipo<select name="tipo" id="lanc-tipo">
         <option value="despesa" ${l.tipo === 'despesa' ? 'selected' : ''}>Despesa</option>

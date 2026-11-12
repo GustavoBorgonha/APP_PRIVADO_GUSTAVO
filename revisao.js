@@ -155,8 +155,26 @@ function vContas() {
   // Ordem do extrato do banco: por data; no mesmo dia, entradas antes das saídas.
   const movs = db.lancamentos.filter(l => chaveConta(l) === c.chave)
     .sort((a, b) => a.data.localeCompare(b.data) || (a.tipo === b.tipo ? 0 : a.tipo === 'receita' ? -1 : 1));
-  let saldo = 0;
-  const comSaldo = movs.map(l => { saldo += l.tipo === 'receita' ? l.valor : -l.valor; return { l, saldo }; });
+  let calc = 0;
+  const lista = movs.map(l => { calc += l.tipo === 'receita' ? l.valor : -l.valor; return { l, calc }; });
+  // Saldo real: o app soma os lançamentos a partir de zero; quando o banco informa um saldo (saldo depois do
+  // movimento no Bradesco, saldo final do extrato no Inter), ele vira a referência e o resto se ajusta a ele.
+  const refs = [];
+  lista.forEach(x => { if (typeof x.l.saldoBanco === 'number') refs.push({ data: x.l.data, real: x.l.saldoBanco, calc: x.calc, tipo: 'mov' }); });
+  const finais = new Map();
+  movs.forEach(l => { if (typeof l.loteSaldo === 'number' && l.loteSaldoData) finais.set(l.loteSaldoData + '|' + l.loteSaldo, { data: l.loteSaldoData, real: l.loteSaldo }); });
+  finais.forEach(f => {
+    const ate = lista.filter(x => x.l.data <= f.data);
+    refs.push({ data: f.data, real: f.real, calc: ate.length ? ate[ate.length - 1].calc : 0, tipo: 'final' });
+  });
+  refs.sort((a, b) => a.data.localeCompare(b.data) || (a.tipo === 'final') - (b.tipo === 'final'));
+  const ref = refs[refs.length - 1], ajuste = ref ? ref.real - ref.calc : 0;
+  const comSaldo = lista.map(x => {
+    const saldo = x.calc + ajuste;
+    const confere = typeof x.l.saldoBanco === 'number' ? Math.abs(x.l.saldoBanco - saldo) < 0.01 : null;
+    return { l: x.l, saldo, confere };
+  });
+  const info = movs.slice().reverse().find(l => l.loteAgencia || l.loteConta);
   const tudo = !!ui.contaTudo;
   const noPeriodo = comSaldo.filter(x => tudo || x.l.data.startsWith(ui.mes));
   const antes = tudo ? [] : comSaldo.filter(x => x.l.data < ui.mes + '-01');
@@ -167,11 +185,12 @@ function vContas() {
   const dias = [];
   noPeriodo.slice().reverse().forEach(x => { const d = dias[dias.length - 1]; if (d && d.data === x.l.data) d.itens.push(x); else dias.push({ data: x.l.data, itens: [x] }); });
   const [ano, mes] = ui.mes.split('-');
-  const linha = ({ l, saldo }) => `<div class="mov" data-a="editarLanc" data-v="${l.id}" role="button" tabindex="0" title="Editar">
+  const linha = ({ l, saldo, confere }) => `<div class="mov" data-a="editarLanc" data-v="${l.id}" role="button" tabindex="0" title="Editar">
       <span class="mov-ic ${l.tipo}">${iconeCat(l.categoria, l.tipo)}</span>
-      <span class="mov-txt"><strong>${esc(l.desc)}</strong><small>${esc(l.categoria)}</small></span>
+      <span class="mov-txt"><strong>${esc(l.desc)}</strong><small>${esc(l.categoria)}${l.hora ? ' · ' + l.hora : ''}</small>${linhaDetalhes(l)}</span>
       <span class="cc-dir"><span class="mov-val ${ehTransf(l) ? 'transf' : l.tipo === 'receita' ? 'pos' : ''}">${l.tipo === 'receita' ? '+' : '−'} ${din(l.valor)}</span>
-        <small class="cc-saldo ${saldo < 0 ? 'neg' : ''}">saldo ${din(saldo)}</small></span>
+        <small class="cc-saldo ${saldo < 0 ? 'neg' : ''}">saldo ${din(saldo)}${confere === true ? ' <span title="Igual ao saldo informado pelo banco">✓</span>' : ''}</small>
+        ${confere === false ? `<small class="cc-difere" title="O banco informou outro saldo: pode faltar algum lançamento antes deste">⚠️ banco: ${din(l.saldoBanco)}</small>` : ''}</span>
     </div>`;
   return `
     <div class="topo">
@@ -195,6 +214,8 @@ function vContas() {
           ${tudo ? '' : `<span class="chip">Saldo anterior <b>${din(saldoAnterior)}</b></span>`}
           <span class="chip"><i class="seta pos">${IC.receita}</i>Entradas <b>${din(entradas)}</b></span>
           <span class="chip"><i class="seta neg">${IC.despesa}</i>Saídas <b>${din(saidas)}</b></span>
+          ${info ? `<span class="chip">🏦 Ag <b>${esc(info.loteAgencia || '—')}</b> · Conta <b>${esc(info.loteConta || '—')}</b></span>` : ''}
+          ${ref ? `<span class="chip" title="O saldo segue o valor informado pelo banco">✓ Conferido com o banco em <b>${fmtData(ref.data)}</b></span>` : ''}
         </div>
       </div>
     </div>
@@ -205,7 +226,7 @@ function vContas() {
         <div class="movs">${d.itens.map(linha).join('')}</div>`).join('')
       : `<div class="vazio">${panda('preguica')}Sem movimentações nesta conta ${tudo ? '' : `em ${nomeMes(ui.mes)}`}.</div>`}
     </div>
-    <p class="muted small">O saldo é calculado com os lançamentos que estão no app, começando em zero no primeiro lançamento desta conta. Transferências entre contas entram aqui, porque o dinheiro sai ou entra da conta.</p>`;
+    <p class="muted small">${ref ? 'O saldo segue o último saldo informado pelo banco no extrato; ✓ indica que bate com o banco e ⚠️ que o banco informou outro valor (pode faltar algum lançamento antes).' : 'O saldo é calculado com os lançamentos que estão no app, começando em zero no primeiro lançamento desta conta. Importe um extrato com saldo para conferir com o banco.'} Transferências entre contas entram aqui, porque o dinheiro sai ou entra da conta.</p>`;
 }
 
 const acoesContas = {
