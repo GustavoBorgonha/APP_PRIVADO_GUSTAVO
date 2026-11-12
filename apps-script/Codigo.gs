@@ -93,3 +93,14 @@ function salvar(aba, mudancas) {
   });
   SpreadsheetApp.flush();
 }
+
+// Diagnóstico: no editor, escolha "testarChave" e clique em Executar; o resultado aparece no "Registro de execução".
+// Chave certa  → 400 ... INVALID_ID_TOKEN  (normal: o teste manda um login falso de propósito)
+// Chave errada → 400 ... API key not valid
+function testarChave() {
+  const r = UrlFetchApp.fetch('https://identitytoolkit.googleapis.com/v1/accounts:lookup?key=' + FIREBASE_API_KEY, {
+    method: 'post', contentType: 'application/json', payload: JSON.stringify({ idToken: 'teste' }), muteHttpExceptions: true,
+  });
+  Logger.log('Chave usada: ' + FIREBASE_API_KEY + ' (' + FIREBASE_API_KEY.length + ' caracteres)');
+  Logger.log(r.getResponseCode() + ' ' + r.getContentText());
+}
