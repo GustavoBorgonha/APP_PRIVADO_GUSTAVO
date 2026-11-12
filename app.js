@@ -1396,6 +1396,15 @@ document.addEventListener('click', e => {
   if (!modal.open) { salvar(); render(); }
 });
 
+// Mouse: a rodinha rola de lado as fileiras que passam da largura (chips, atalhos, botões).
+document.addEventListener('wheel', e => {
+  const el = e.target.closest('.acoes.rolavel, .chips, .atalhos');
+  if (!el || el.scrollWidth <= el.clientWidth || Math.abs(e.deltaX) > Math.abs(e.deltaY)) return;
+  const antes = el.scrollLeft;
+  el.scrollLeft += e.deltaY;
+  if (el.scrollLeft !== antes) e.preventDefault();   // só segura a página se a fileira realmente rolou
+}, { passive: false });
+
 // Teclado: Enter/Espaço ativam as linhas clicáveis do extrato.
 document.addEventListener('input', e => {
   const t = e.target;

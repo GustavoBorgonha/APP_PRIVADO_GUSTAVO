@@ -1049,3 +1049,9 @@ a.btn { text-decoration: none; color: var(--text); display: inline-flex; align-i
 }
 .escolhas.duas { grid-template-columns: 1fr 1fr; }
 .escolhas.duas .escolha > span { align-items: center; justify-content: center; padding: 10px 6px; }
+
+/* Computador: as fileiras de botões quebram em mais de uma linha (tudo visível, sem precisar rolar).
+   No celular continuam rolando de lado com o dedo. */
+@media (min-width: 761px) {
+  .acoes.rolavel { flex-wrap: wrap; overflow: visible; }
+}
