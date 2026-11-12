@@ -966,6 +966,16 @@ function abrirSeletor(el) {
     const tipo = fonte.slice(5), nomes = nomesCats(tipo);
     if (atual && !nomes.includes(atual)) nomes.unshift(atual);
     grupos = [['', nomes.map(n => ({ nome: n, ic: iconeCat(n, tipo) }))]];
+  } else if (fonte === 'periodo') {
+    // Revisão: mostra quantos lançamentos cada categoria tem no período escolhido (De/Até do formulário).
+    const f = el.closest('form'), de = (f && f.de && f.de.value) || '0000-01-01', ate = (f && f.ate && f.ate.value) || '9999-12-31';
+    const n = {};
+    db.lancamentos.forEach(l => { if (l.data >= de && l.data <= ate) n[l.categoria] = (n[l.categoria] || 0) + 1; });
+    const todas = listaCategorias().map(x => ({ nome: x.nome, ic: iconeCat(x.nome, x.tipo === 'receita' ? 'receita' : 'despesa') }));
+    Object.keys(n).forEach(nome => { if (!todas.some(x => x.nome === nome)) todas.push({ nome, ic: '🏷️' }); });   // usadas sem cadastro
+    todas.forEach(x => { x.n = n[x.nome] || 0; });
+    const com = todas.filter(x => x.n).sort((a, b) => b.n - a.n || ordemAlfa(a.nome, b.nome));
+    grupos = [[`Com lançamentos no período (${com.length})`, com], ['Sem lançamentos no período', todas.filter(x => !x.n)]].filter(([, l]) => l.length);
   } else {
     const origem = fonte.slice(6), destinos = listaCategorias().filter(x => x.nome !== origem);
     grupos = [['despesa', 'Despesas'], ['receita', 'Receitas'], ['ambos', 'Servem para as duas']]
@@ -978,9 +988,10 @@ function abrirSeletor(el) {
   painel.innerHTML = `
     <div class="seletor-busca"><input type="search" placeholder="Buscar categoria" aria-label="Buscar categoria" autocomplete="off"></div>
     <div class="seletor-lista" role="listbox">${grupos.map(([rot, l]) => (rot ? `<div class="seletor-grupo">${rot}</div>` : '') +
-      l.map(o => `<button type="button" class="seletor-op ${o.nome === atual ? 'on' : ''}" role="option" aria-selected="${o.nome === atual}"
+      l.map(o => `<button type="button" class="seletor-op ${o.nome === atual ? 'on' : ''} ${o.n === 0 ? 'sem-mov' : ''}" role="option" aria-selected="${o.nome === atual}"
         data-a="escolherOpcao" data-v="${esc(o.nome)}" data-busca="${esc(semAcentoApp(o.nome))}">
-        <span class="seletor-ic">${o.ic}</span><span class="seletor-txt">${esc(o.nome)}</span><span class="seletor-ok">✓</span></button>`).join('')).join('')}
+        <span class="seletor-ic">${o.ic}</span><span class="seletor-txt">${esc(o.nome)}</span>
+        ${o.n !== undefined ? `<span class="seletor-n" title="Lançamentos no período">${o.n}</span>` : ''}<span class="seletor-ok">✓</span></button>`).join('')).join('')}
       <p class="seletor-nada muted small" hidden>Nenhuma categoria com esse nome.</p></div>
     ${fonte.startsWith('tipo:') ? `<button type="button" class="seletor-gerenciar" data-a="irCategorias">🏷️ Criar ou editar categorias</button>` : ''}`;
   // Na frente de tudo (inclusive das janelas): top layer do navegador quando disponível.

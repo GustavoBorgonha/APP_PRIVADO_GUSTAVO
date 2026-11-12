@@ -1069,3 +1069,10 @@ a.btn { text-decoration: none; color: var(--text); display: inline-flex; align-i
 .info-ext { color: var(--muted); font-size: 13px; }
 .cc-difere { color: #b7791f; font-size: 11.5px; white-space: nowrap; }
 .lanc-orig { display: flex; flex-direction: column; gap: 2px; margin: -6px 0 14px; padding: 10px 12px; border-radius: 14px; background: var(--soft); font-size: 13.5px; }
+
+/* Seletor da revisão: quantidade de lançamentos no período */
+.seletor-n { min-width: 26px; padding: 1px 8px; border-radius: 99px; background: var(--acento-suave); color: var(--acento); font-size: 12px; font-weight: 700; text-align: center; }
+.seletor-op .seletor-n + .seletor-ok { margin-left: 8px; }
+.seletor-op:has(.seletor-n) .seletor-ok { margin-left: 0; }
+.seletor-op.sem-mov { opacity: .5; }
+.seletor-op.sem-mov .seletor-n { background: var(--soft-2); color: var(--muted); }

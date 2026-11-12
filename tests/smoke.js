@@ -518,7 +518,10 @@ async function revisaoEContas(navegador, url, erros) {
   await p.click('text=🔎 Revisar categoria');
   await p.fill('form[data-f=revisaoInicio] [name=de]', '2026-01-01');
   await p.fill('form[data-f=revisaoInicio] [name=ate]', '2026-12-31');
-  await escolher(p, '#rev-cat', 'Outros');
+  await p.locator('#rev-cat').locator('xpath=..').locator('.seletor-btn').click();
+  confere((await p.textContent('.seletor-op[data-v="Outros"] .seletor-n')).trim() === '3' && await p.locator('.seletor-op.sem-mov[data-v="Moradia"]').count() === 1,
+    'na revisão, a lista mostra quantos lançamentos cada categoria tem no período');
+  await p.click('.seletor-painel .seletor-op[data-v="Outros"]');
   await p.click('text=Começar revisão');
   confere(await p.locator('.rev').count() === 3, 'revisão traz só a categoria e o período escolhidos');
   confere(await p.locator('.rev-sug').count() === 2, 'sugere pelo histórico (Uber → Transporte), sem sugerir a própria categoria');

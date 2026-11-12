@@ -76,6 +76,8 @@ PWA em JavaScript puro (sem framework, sem build) para finanças pessoais e plan
 - `revisao.js` — duas telas internas abertas por Finanças: **Revisar categoria** (`vRevisao`, aba `revisao`):
   período + categoria → cartões estilo triagem para trocar categoria/descrição e confirmar ou pular; sugere
   pelo histórico sem contar a própria categoria (`memoriaHistorico(filtro)`), com "Aplicar sugestões".
+  O seletor de categoria dessa tela usa a fonte `periodo`: mostra quantos lançamentos cada categoria tem
+  entre o De/Até do formulário (com movimento primeiro; sem movimento apagadas).
   **Conta corrente** (`vContas`, aba `contas`): cada conta = banco + meio + titular (`chaveConta`), lista
   cada movimento (inclusive transferências) com o saldo depois dele; saldo começa em zero no 1º lançamento.
 - `agenda.js` — **Lançamentos futuros** (aba interna `agenda`, aberta por Finanças): `db.agendados` (coleção

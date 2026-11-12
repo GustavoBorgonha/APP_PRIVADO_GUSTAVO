@@ -63,7 +63,7 @@ function vRevisao() {
         <form class="form" data-f="revisaoInicio">
           <label>De<input type="date" name="de" value="${tresMeses}"></label>
           <label>Até<input type="date" name="ate" value="${hojeISO}"></label>
-          <label class="full">Categoria${seletorCat('name="categoria" id="rev-cat"', 'mover:', 'Outros', 'Escolha a categoria')}</label>
+          <label class="full">Categoria${seletorCat('name="categoria" id="rev-cat"', 'periodo', 'Outros', 'Escolha a categoria')}</label>
           <div class="acoes full rev-atalhos">
             <span class="muted small">Período rápido:</span>
             <button type="button" class="btn mini" data-a="revPeriodo" data-v="mes">Este mês</button>
