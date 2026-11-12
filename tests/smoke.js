@@ -95,6 +95,11 @@ async function modoLocal(navegador, url, erros) {
   // Categorias: criar com emoji, usar, renomear (atualiza lançamentos), emoji próprio e excluir.
   await p.click('.nav >> text=Finanças');
   await p.click('text=🏷️ Categorias');
+  await p.fill('#cat-busca', 'merc');
+  confere(await p.locator('.cat-card:visible').count() === 1 && await p.isVisible('.cat-card:has-text("Mercado")'), 'pesquisa de categorias filtra enquanto digita');
+  await p.fill('#cat-busca', 'xyzw');
+  confere(await p.isVisible('.cat-nada'), 'pesquisa sem resultado oferece criar a categoria');
+  await p.fill('#cat-busca', '');
   await p.click('[data-a=novaCat]');
   await p.fill('dialog [name=nome]', 'Pets');
   await p.click('dialog .emo[data-v="🐶"]');

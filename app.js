@@ -275,6 +275,7 @@ function render() {
   if (trocou) { void app.offsetWidth; app.classList.add('entrando'); window.scrollTo(0, 0); }
   Panda.atualizar();
   if (ui.aba === 'cidades') { filtrarCidades(); montarMapaCidades(); aoMostrarCidades(); }
+  if (ui.aba === 'categorias') filtrarCategorias();
 }
 
 /* Humor "de fundo" do panda: fica tristinho com o saldo do mês no vermelho. */
@@ -1007,13 +1008,13 @@ function vCategorias() {
   const lista = listaCategorias();
   const uso = {};
   db.lancamentos.forEach(l => { uso[l.categoria] = (uso[l.categoria] || 0) + 1; });
-  const cartao = c => `<button class="cat-card" data-a="editarCat" data-v="${esc(c.id)}">
+  const cartao = c => `<button class="cat-card" data-a="editarCat" data-v="${esc(c.id)}" data-busca="${esc(semAcentoApp(c.nome))}">
       <span class="cat-ic">${c.img ? `<img class="cat-img" src="${esc(c.img)}" alt="">` : esc(c.emoji || '🏷️')}</span>
       <span class="cat-nome">${esc(c.nome)}</span>
       <small>${uso[c.nome] ? `${uso[c.nome]} ${uso[c.nome] === 1 ? 'lançamento' : 'lançamentos'}` : 'sem lançamentos'}</small>
     </button>`;
   const soltas = Object.keys(uso).filter(n => n && !lista.some(c => c.nome === n));
-  const grupo = (titulo, itens) => itens.length ? `<div class="topo secao"><h2>${titulo}</h2></div><div class="cats-grid">${itens.map(cartao).join('')}</div>` : '';
+  const grupo = (titulo, itens) => itens.length ? `<section class="cat-grupo"><div class="topo secao"><h2>${titulo}</h2></div><div class="cats-grid">${itens.map(cartao).join('')}</div></section>` : '';
   return `
     <div class="topo">
       <div><button class="btn mini voltar" data-a="aba" data-v="financas">${IC.voltar} Finanças</button>
@@ -1024,13 +1025,26 @@ function vCategorias() {
     </div>
     ${App.modo === 'nuvem' && App.semNuvem.categorias ? `<p class="tri-aviso forte" style="margin:0 0 16px">⚠️ As categorias estão salvas só neste aparelho:
       ${App.semNuvem.categorias === 'regras' ? 'falta atualizar as regras do Firebase (veja o CONFIGURAR.md).' : 'não foi possível falar com a nuvem.'}</p>` : ''}
+    <input id="cat-busca" class="busca-grande" type="search" placeholder="🔎 Pesquisar categoria" autocomplete="off" value="${esc(ui.catBusca || '')}">
+    <div class="vazio cat-nada" hidden>${panda('preguica')}Nenhuma categoria com esse nome.
+      <div class="acoes" style="justify-content:center;margin-top:12px"><button class="btn pri" data-a="novaCatBusca">+ Criar essa categoria</button></div></div>
     ${grupo('Despesas', lista.filter(c => c.tipo === 'despesa'))}
     ${grupo('Receitas', lista.filter(c => c.tipo === 'receita'))}
     ${grupo('Servem para os dois', lista.filter(c => c.tipo === 'ambos'))}
-    ${soltas.length ? `<div class="topo secao"><h2>Usadas nos lançamentos, mas sem cadastro</h2></div>
+    ${soltas.length ? `<section class="cat-grupo"><div class="topo secao"><h2>Usadas nos lançamentos, mas sem cadastro</h2></div>
       <p class="muted small" style="margin-top:-6px">Cadastre para escolher um ícone e ela aparecer na lista.</p>
-      <div class="cats-grid">${soltas.map(n => `<button class="cat-card solta" data-a="cadastrarCat" data-v="${esc(n)}">
-        <span class="cat-ic">🏷️</span><span class="cat-nome">${esc(n)}</span><small>${uso[n]} ${uso[n] === 1 ? 'lançamento' : 'lançamentos'} · cadastrar</small></button>`).join('')}</div>` : ''}`;
+      <div class="cats-grid">${soltas.map(n => `<button class="cat-card solta" data-a="cadastrarCat" data-v="${esc(n)}" data-busca="${esc(semAcentoApp(n))}">
+        <span class="cat-ic">🏷️</span><span class="cat-nome">${esc(n)}</span><small>${uso[n]} ${uso[n] === 1 ? 'lançamento' : 'lançamentos'} · cadastrar</small></button>`).join('')}</div></section>` : ''}`;
+}
+// Pesquisa da tela de categorias: esconde os cartões que não batem, sem redesenhar a tela (não perde o foco).
+function filtrarCategorias() {
+  const q = semAcentoApp(ui.catBusca || ''); let algum = false;
+  document.querySelectorAll('.cat-grupo').forEach(g => {
+    let vis = 0;
+    g.querySelectorAll('.cat-card').forEach(c => { const ok = !q || c.dataset.busca.includes(q); c.hidden = !ok; if (ok) vis++; });
+    g.hidden = !vis; algum = algum || vis > 0;
+  });
+  const nada = document.querySelector('.cat-nada'); if (nada) nada.hidden = algum;
 }
 
 const EMOJIS = ['🏠', '🍽️', '🛒', '🍕', '🍔', '☕', '🍺', '🍿', '🚌', '🚗', '⛽', '🅿️', '✈️', '🏖️', '🏨', '🎫',
@@ -1307,6 +1321,7 @@ const acoes = {
   abrirSeletor: (v, el) => { abrirSeletor(el.closest('.seletor')); return Promise.resolve(); },
   escolherOpcao: v => { escolherOpcao(v); return Promise.resolve(); },
   novaCat: () => modalCategoria(),
+  novaCatBusca: () => modalCategoria(null, (ui.catBusca || '').trim()),
   cadastrarCat: v => modalCategoria(null, v),
   editarCat: v => { const c = listaCategorias().find(x => x.id === v); if (c) modalCategoria(c); },
   irCategorias: () => { fecharSeletor(); fecharModal(); ui.aba = 'categorias'; ui.plano = null; ui.naTriagem = false; },
@@ -1408,6 +1423,7 @@ document.addEventListener('wheel', e => {
 // Teclado: Enter/Espaço ativam as linhas clicáveis do extrato.
 document.addEventListener('input', e => {
   const t = e.target;
+  if (t.id === 'cat-busca') { ui.catBusca = t.value; filtrarCategorias(); return; }
   if (t.name === 'emojiProprio' && t.form) { const em = primeiroEmoji(t.value); if (em) { t.form.emoji.value = em; t.form.img.value = ''; } previaCat(); }
   else if (t.name === 'nome' && t.form && t.form.emojiProprio) previaCat();
 });

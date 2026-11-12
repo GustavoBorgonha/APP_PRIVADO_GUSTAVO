@@ -1055,3 +1055,7 @@ a.btn { text-decoration: none; color: var(--text); display: inline-flex; align-i
 @media (min-width: 761px) {
   .acoes.rolavel { flex-wrap: wrap; overflow: visible; }
 }
+
+/* Pesquisa da tela de categorias */
+.busca-grande { margin: 0 0 18px; padding: 12px 16px; font-size: 15px; border-radius: 16px; }
+.cat-card[hidden], .cat-grupo[hidden] { display: none; }
