@@ -979,3 +979,37 @@ a.btn { text-decoration: none; color: var(--text); display: inline-flex; align-i
 .cid-leg.on { opacity: 1; }
 /* Lista longa (295 cidades): rola dentro do cartão em vez de esticar a página */
 .cid-lista { max-height: 560px; overflow-y: auto; overscroll-behavior: contain; margin: 0 -4px; padding: 0 4px; }
+
+/* Mapa estilo "Maps" (Leaflet) */
+.cid-mapa-base {
+  position: relative; z-index: 0; isolation: isolate;   /* não passa por cima do menu nem das janelas */
+  height: 460px; border-radius: 18px; overflow: hidden; background: var(--soft);
+  display: grid; place-items: center;
+}
+.cid-mapa-base.leaflet-container { display: block; font: inherit; }
+@media (max-width: 760px) { .cid-mapa-base { height: 360px; } }
+.cid-mapa-base .leaflet-control-zoom { border: 0; box-shadow: var(--shadow-alta); border-radius: 12px; overflow: hidden; }
+.cid-mapa-base .leaflet-control-zoom a { background: var(--card); color: var(--text); border-color: var(--line); width: 34px; height: 34px; line-height: 34px; }
+.cid-mapa-base .leaflet-control-attribution { background: color-mix(in srgb, var(--card) 80%, transparent); color: var(--muted); font-size: 10px; }
+.cid-mapa-base .leaflet-control-attribution a { color: var(--muted); }
+.cid-mapa-base .leaflet-popup-content-wrapper { background: var(--card); color: var(--text); border-radius: 18px; box-shadow: var(--shadow-alta); }
+.cid-mapa-base .leaflet-popup-tip { background: var(--card); }
+.cid-mapa-base .leaflet-popup-content { margin: 14px 16px; }
+.cid-mapa-base .leaflet-container a.leaflet-popup-close-button, .cid-mapa-base a.leaflet-popup-close-button { color: var(--muted); }
+.cid-mapa-base .leaflet-tooltip { background: var(--card); color: var(--text); border: 0; border-radius: 10px; box-shadow: var(--shadow-alta); font-weight: 600; }
+.cid-mapa-base .leaflet-tooltip-top::before { border-top-color: var(--card); }
+.cid-pino { cursor: pointer; transition: fill-opacity .15s; }
+.cid-pop { display: flex; flex-direction: column; gap: 4px; min-width: 190px; }
+.cid-pop strong { font-size: 15px; }
+.cid-pop small { color: var(--muted); }
+.cid-pop p { margin: 2px 0; font-size: 13px; }
+.cid-pop-st { font-size: 13px; font-weight: 600; color: var(--muted); }
+.cid-pop-st.on { color: var(--acento); }
+.cid-pop-acoes { display: flex; gap: 6px; margin-top: 6px; }
+
+/* Computador: o conteúdo ocupa a tela e fica centralizado no espaço ao lado do menu */
+@media (min-width: 761px) {
+  main { max-width: 1480px; margin-inline: auto; width: 100%; padding-inline: clamp(24px, 3vw, 48px); }
+}
+.cid-mapa-base.leaflet-container { background: var(--soft); }
+.cid-mapa-base .cid-pino:focus, .cid-mapa-base .cid-pino:focus-visible { outline: none; }

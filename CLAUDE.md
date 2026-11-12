@@ -64,6 +64,9 @@ PWA em JavaScript puro (sem framework, sem build) para finanças pessoais e plan
   enviadas na hora; a lista fica em cache (`apg-cidades`). Busca novidades ao abrir a tela e a cada 1 min.
   Falhou: faixa de aviso na tela (`faixaSincronizacao`) e, se houver fila, também em Início/Planos
   (`avisoCidadesGlobal`). O teste simula a ponte.
+  Mapa estilo "Maps": Leaflet 1.9.4 (unpkg, com SRI, carregado só nessa tela) + mapa base CARTO/OpenStreetMap
+  (claro/escuro conforme o tema); criado uma vez e reaproveitado entre redesenhos (`montarMapaCidades`).
+  Sem internet para o mapa, cai no mapa simples de pontos (`mapaCidades`). No CI o Leaflet vem de node_modules.
 - `nuvem.js` — login e sincronização. `App.sincronizar(db)` envia só o que mudou; os
   `onSnapshot` chamam `App.receber()`.
 - `firebase-config.js` — configuração pública do Firebase (não é segredo).

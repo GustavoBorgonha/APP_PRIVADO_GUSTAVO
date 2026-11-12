@@ -274,7 +274,7 @@ function render() {
   app.innerHTML = views[ui.aba]();
   if (trocou) { void app.offsetWidth; app.classList.add('entrando'); window.scrollTo(0, 0); }
   Panda.atualizar();
-  if (ui.aba === 'cidades') { filtrarCidades(); aoMostrarCidades(); }
+  if (ui.aba === 'cidades') { filtrarCidades(); montarMapaCidades(); aoMostrarCidades(); }
 }
 
 /* Humor "de fundo" do panda: fica tristinho com o saldo do mês no vermelho. */

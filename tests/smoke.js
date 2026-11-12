@@ -366,6 +366,15 @@ async function cidadesPlanilha(navegador, url, erros) {
     (pedido.mudancas || []).forEach(m => { const l = planilha.find(x => x[0] === m.municipio); if (l) { l[3] = m.visitei ? 'Sim' : 'Não'; l[4] = m.data; l[5] = m.obs; } });
     r.fulfill({ contentType: 'application/json', headers: { 'access-control-allow-origin': '*' }, body: JSON.stringify({ ok: true, cidades: planilha }) });
   });
+  // Mapa: o Leaflet vem da pasta node_modules quando instalado (CI); sem ele, testa o mapa simples.
+  let leafletDir = null;
+  try { leafletDir = path.dirname(require.resolve('leaflet/dist/leaflet.js')); } catch (e) { /* sem leaflet */ }
+  await ctx.route('https://unpkg.com/leaflet@*/dist/*', r => {
+    const arq = r.request().url().split('/').pop();
+    if (!leafletDir || !fs.existsSync(path.join(leafletDir, arq))) return r.abort();
+    r.fulfill({ body: fs.readFileSync(path.join(leafletDir, arq)), contentType: arq.endsWith('.css') ? 'text/css' : 'text/javascript', headers: { 'access-control-allow-origin': '*' } });
+  });
+  await ctx.route(/basemaps\.cartocdn\.com/, r => r.abort());
   const p = await ctx.newPage();
   p.on('pageerror', e => erros.push('cidades: ' + e.message));
   p.on('dialog', d => d.accept());
@@ -378,7 +387,16 @@ async function cidadesPlanilha(navegador, url, erros) {
   await p.waitForSelector('.cid-linha');
   confere(await p.locator('.cid-linha').count() === 4 && (await p.textContent('.hero .saldo-val')).includes('50'), 'lê as cidades da planilha e calcula o % visitado');
   confere(await p.isVisible('.cid-faixa.ok'), 'mostra que está sincronizado com a planilha');
-  confere(await p.locator('.cid-ponto').count() === 4 && await p.locator('.cid-ponto.on').count() === 2, 'mapa mostra as cidades, com as visitadas em destaque');
+  await p.waitForSelector('.cid-ponto, path.cid-pino');
+  const mapaBase = await p.locator('path.cid-pino').count() > 0;
+  confere(await p.locator('.cid-ponto, path.cid-pino').count() === 4 && await p.locator('.cid-ponto.on, path.cid-pino.on').count() === 2,
+    `mapa mostra as cidades, com as visitadas em destaque (${mapaBase ? 'mapa estilo Maps' : 'mapa simples, sem Leaflet'})`);
+  if (mapaBase) {
+    await p.locator('path.cid-pino:not(.on)').first().click();
+    await p.waitForSelector('.cid-pop');
+    confere(await p.isVisible('.cid-pop >> text=Marcar como visitada'), 'tocar numa cidade do mapa abre o balão com o botão de marcar');
+    await p.keyboard.press('Escape');
+  }
 
   await p.locator('.cid-linha', { hasText: 'Lages' }).locator('.cid-check').click();
   await p.waitForFunction(() => document.querySelector('.cid-faixa.ok') && !document.querySelector('.cid-linha small')?.textContent.includes('aguardando'));

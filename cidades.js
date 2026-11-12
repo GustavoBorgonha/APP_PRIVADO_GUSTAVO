@@ -165,7 +165,108 @@ function cartaoCidades() {
   </div>`;
 }
 
-// Mapa: cada cidade é um ponto na posição real (latitude/longitude).
+/* ---------- mapa estilo "Maps" (Leaflet + mapa base do OpenStreetMap/CARTO) ----------
+   A biblioteca só é baixada quando a tela de cidades abre. O mapa é criado uma vez e
+   reaproveitado entre um redesenho e outro (não perde o zoom nem pisca). Sem internet
+   para baixar o mapa, cai no mapa simples de pontos (mapaCidades). */
+const LEAFLET = 'https://unpkg.com/leaflet@1.9.4/dist/';
+let promessaLeaflet = null;
+function carregarLeaflet() {
+  if (window.L && window.L.map) return Promise.resolve(window.L);
+  if (promessaLeaflet) return promessaLeaflet;
+  promessaLeaflet = new Promise((ok, falha) => {
+    const css = Object.assign(document.createElement('link'), { rel: 'stylesheet', href: LEAFLET + 'leaflet.css',
+      integrity: 'sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=', crossOrigin: '' });
+    const js = Object.assign(document.createElement('script'), { src: LEAFLET + 'leaflet.js',
+      integrity: 'sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=', crossOrigin: '' });
+    js.onload = () => ok(window.L);
+    js.onerror = () => { promessaLeaflet = null; falha(new Error('Não foi possível carregar o mapa.')); };
+    document.head.append(css, js);
+  });
+  return promessaLeaflet;
+}
+const temaEscuro = matchMedia('(prefers-color-scheme: dark)');
+function fundoDoMapa() {
+  if (!Cid.mapa) return;
+  if (Cid.fundo) Cid.mapa.removeLayer(Cid.fundo);
+  const estilo = temaEscuro.matches ? 'dark_all' : 'rastertiles/voyager';
+  Cid.fundo = L.tileLayer(`https://{s}.basemaps.cartocdn.com/${estilo}/{z}/{x}/{y}{r}.png`, {
+    subdomains: 'abcd', maxZoom: 19, detectRetina: true,
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions" target="_blank" rel="noopener">CARTO</a>',
+  }).addTo(Cid.mapa);
+}
+temaEscuro.addEventListener?.('change', fundoDoMapa);
+
+function balaoCidade(c) {
+  return `<div class="cid-pop">
+    <strong>${esc(c.m)}</strong><small>${esc(c.micro)}</small>
+    <span class="cid-pop-st ${c.v ? 'on' : ''}">${c.v ? `✓ Visitada${c.d ? ' em ' + esc(c.d) : ''}` : 'Ainda não visitada'}</span>
+    ${c.o ? `<p>${esc(c.o)}</p>` : ''}${c.pendente ? '<small>⏳ aguardando planilha</small>' : ''}
+    <div class="cid-pop-acoes">
+      <button class="btn mini ${c.v ? '' : 'pri'}" data-a="cidAlternar" data-v="${esc(c.m)}">${c.v ? 'Desmarcar' : '✓ Marcar como visitada'}</button>
+      <button class="btn mini" data-a="cidAbrir" data-v="${esc(c.m)}">Editar</button>
+    </div></div>`;
+}
+function marcadoresCidades(l) {
+  l.forEach(c => {
+    if (!isFinite(c.lat) || !isFinite(c.lng)) return;
+    const estilo = c.v
+      ? { radius: 7, weight: 2, color: '#ffffff', fillColor: '#f2711c', fillOpacity: 1 }
+      : { radius: 4.5, weight: 1, color: '#ffffff', fillColor: '#7d8590', fillOpacity: .8 };
+    let mk = Cid.marcas.get(c.m);
+    if (!mk) {
+      mk = L.circleMarker([c.lat, c.lng], { ...estilo, className: 'cid-pino' }).addTo(Cid.mapa);
+      mk.bindTooltip(c.m, { direction: 'top', offset: [0, -6] });
+      mk.bindPopup('', { maxWidth: 260 });
+      Cid.marcas.set(c.m, mk);
+    } else { mk.setStyle(estilo); mk.setRadius(estilo.radius); }
+    mk.getElement()?.classList.toggle('on', c.v);
+    if (c.v) mk.bringToFront();
+    mk.setPopupContent(balaoCidade(c));
+  });
+}
+// Chamado depois de cada redesenho da tela de cidades: coloca o mapa no lugar reservado.
+function montarMapaCidades() {
+  const lugar = document.getElementById('cid-mapa-lugar'); if (!lugar) return;
+  const l = cidadesAtuais();
+  if (Cid.semMapaBase) { lugar.outerHTML = mapaCidades(l); return; }
+  if (Cid.mapaEl) {
+    lugar.replaceWith(Cid.mapaEl);
+    Cid.mapa.invalidateSize();
+    marcadoresCidades(l);
+    return;
+  }
+  carregarLeaflet().then(() => {
+    const aqui = document.getElementById('cid-mapa-lugar'); if (!aqui || Cid.mapaEl) return montarMapaCidades();
+    const el = document.createElement('div');
+    el.className = 'cid-mapa-base';
+    aqui.replaceWith(el);
+    Cid.mapaEl = el; Cid.marcas = new Map();
+    Cid.mapa = L.map(el, { scrollWheelZoom: false, zoomSnap: .5 });
+    fundoDoMapa();
+    const pts = cidadesAtuais().filter(c => isFinite(c.lat) && isFinite(c.lng)).map(c => [c.lat, c.lng]);
+    if (pts.length) Cid.mapa.fitBounds(pts, { padding: [18, 18] }); else Cid.mapa.setView([-27.3, -50.5], 7);
+    // Roda do mouse só dá zoom depois de clicar no mapa (para a página continuar rolando normal).
+    Cid.mapa.on('click', () => Cid.mapa.scrollWheelZoom.enable());
+    Cid.mapa.on('mouseout', () => Cid.mapa.scrollWheelZoom.disable());
+    // O Leaflet não deixa o clique do balão chegar na página: os botões são tratados aqui.
+    Cid.mapa.on('popupopen', e => {
+      e.popup.getElement().onclick = ev => {
+        const b = ev.target.closest('[data-a]'); if (!b || !acoes[b.dataset.a]) return;
+        ev.preventDefault();
+        const r = acoes[b.dataset.a](b.dataset.v, b);
+        if (!(r instanceof Promise) && !modal.open) { salvar(); render(); }
+      };
+    });
+    marcadoresCidades(cidadesAtuais());
+  }).catch(() => {
+    Cid.semMapaBase = true;
+    const aqui = document.getElementById('cid-mapa-lugar');
+    if (aqui) aqui.outerHTML = mapaCidades(cidadesAtuais());
+  });
+}
+
+// Mapa simples (sem internet para o mapa base): cada cidade é um ponto na posição real.
 function mapaCidades(l) {
   const pts = l.filter(c => isFinite(c.lat) && isFinite(c.lng));
   if (!pts.length) return '';
@@ -222,8 +323,8 @@ function vCidades() {
       </div>
     </div>
     <div class="cols-2" style="grid-template-columns:1.3fr 1fr">
-      <div class="card"><h2>Mapa</h2>${mapaCidades(l)}
-        <p class="muted small" style="margin:6px 0 0">Toque num ponto para ver a cidade. <span class="cid-leg on"></span> visitada <span class="cid-leg"></span> ainda não</p></div>
+      <div class="card"><h2>Mapa</h2><div id="cid-mapa-lugar" class="cid-mapa-base"><span class="muted small">Carregando mapa…</span></div>
+        <p class="muted small" style="margin:8px 0 0">Toque numa cidade para ver e marcar. <span class="cid-leg on"></span> visitada <span class="cid-leg"></span> ainda não</p></div>
       <div class="card"><h2>Por mesorregião</h2>${grupo('meso').sort((a, b) => b.vis / b.total - a.vis / a.total || a.nome.localeCompare(b.nome)).map(barraGrupo).join('')}
         <details class="cid-micro"><summary>Ver por microrregião</summary>
           ${grupo('micro').sort((a, b) => a.meso.localeCompare(b.meso) || a.nome.localeCompare(b.nome)).map(barraGrupo).join('')}</details></div>
