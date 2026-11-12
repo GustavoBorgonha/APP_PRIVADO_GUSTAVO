@@ -332,6 +332,15 @@ async function triagemEntreAparelhos(navegador, url, erros) {
   await p.click('.nav >> text=Extratos');
   confere(await p.isVisible('text=falta atualizar as regras do Firebase'), 'sem a regra nova, avisa que a triagem fica só no aparelho');
   await ctx.close();
+
+  // Categoria criada antes da regra existir (ficou só no aparelho) sobe para a nuvem quando a regra chega.
+  ({ ctx, p } = await aparelho(() => {
+    window.__email = 'ok@gmail.com';
+    localStorage.setItem('apg-categorias', JSON.stringify([{ id: 'cat-local', nome: 'Internet', tipo: 'despesa', emoji: '🌐', img: '' }]));
+  }));
+  await p.waitForFunction(() => window.__store.categorias.has('cat-local'));
+  confere(await p.evaluate(() => localStorage.getItem('apg-categorias')) === null, 'categorias que estavam só no aparelho vão para a nuvem');
+  await ctx.close();
 }
 
 async function modoNuvem(navegador, url, erros) {

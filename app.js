@@ -1353,7 +1353,25 @@ App.carregando = () => {
 };
 // Triagem vinda da nuvem (de qualquer aparelho).
 // Categorias vindas da nuvem.
-App.receberCategorias = docs => { db.categorias = docs; versaoCats++; if (App.modo === 'nuvem') renderSeguro(); };
+App.receberCategorias = docs => {
+  db.categorias = docs; versaoCats++;
+  // Categorias criadas enquanto a nuvem recusava (regras antigas) estavam só neste aparelho: junta e envia.
+  let local = null;
+  try { local = JSON.parse(localStorage.getItem('apg-categorias')); } catch (e) { /* sem armazenamento */ }
+  if (Array.isArray(local) && local.length) {
+    const ids = new Set(docs.map(d => d.id));
+    const faltam = local.filter(c => c && c.id && !ids.has(c.id));
+    if (faltam.length) { db.categorias = [...docs, ...faltam]; App.catsPendentes = true; }
+    else try { localStorage.removeItem('apg-categorias'); } catch (e) { /* sem armazenamento */ }
+  }
+  if (App.modo === 'nuvem') { enviarCatsPendentes(); renderSeguro(); }
+};
+function enviarCatsPendentes() {
+  if (!App.catsPendentes) return;
+  App.catsPendentes = false;
+  salvar();
+  try { localStorage.removeItem('apg-categorias'); } catch (e) { /* sem armazenamento */ }
+}
 App.semCategoriasNaNuvem = e => {
   console.error(e);
   if (App.categoriasSemNuvem) return;
@@ -1406,6 +1424,7 @@ App.receber = (colecao, docs, pronto) => {
       if (!(db.categorias || []).length) db.categorias = local.categorias || [];
       salvar();
     }
+    enviarCatsPendentes();
   }
   renderSeguro();
 };
