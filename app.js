@@ -145,11 +145,11 @@ function lerArquivo(accept) {
 }
 
 /* ---------- dados ---------- */
-function vazio() { return { versao: 1, lancamentos: [], planos: [], categorias: [] }; }
+function vazio() { return { versao: 1, lancamentos: [], planos: [], categorias: [], agendados: [] }; }
 function carregar() {
   try {
     const d = JSON.parse(localStorage.getItem(CHAVE));
-    if (d && Array.isArray(d.lancamentos) && Array.isArray(d.planos)) { if (!Array.isArray(d.categorias)) d.categorias = []; return d; }
+    if (d && Array.isArray(d.lancamentos) && Array.isArray(d.planos)) { if (!Array.isArray(d.categorias)) d.categorias = []; if (!Array.isArray(d.agendados)) d.agendados = []; return d; }
   } catch (e) { /* sem dados */ }
   return vazio();
 }
@@ -157,8 +157,8 @@ function salvar() {
   versaoCats++;
   if (App.modo === 'nuvem') {
     App.sincronizar?.(db);
-    // Se a nuvem ainda não aceita categorias (regras antigas), elas ficam salvas neste aparelho.
-    if (App.categoriasSemNuvem) try { localStorage.setItem('apg-categorias', JSON.stringify(db.categorias || [])); } catch (e) { /* sem armazenamento */ }
+    // Coleções que a nuvem ainda não aceita (regras antigas) ficam salvas neste aparelho.
+    Object.keys(EXTRAS).forEach(c => { if (App.semNuvem[c]) try { localStorage.setItem(EXTRAS[c], JSON.stringify(db[c] || [])); } catch (e) { /* sem armazenamento */ } });
     return;
   }
   if (App.modo !== 'local') return;
@@ -264,9 +264,9 @@ function render() {
   document.body.dataset.aba = ui.aba;
   if (App.modo === 'carregando') { $('#app').innerHTML = `<div class="carregando">${panda()}Carregando seus dados…</div>`; return; }
   if (App.modo === 'login') { $('#app').innerHTML = vLogin(); return; }
-  const abaMenu = ['categorias', 'revisao', 'contas'].includes(ui.aba) ? 'financas' : ui.aba === 'cidades' ? 'planos' : ui.aba;
+  const abaMenu = ['categorias', 'revisao', 'contas', 'agenda'].includes(ui.aba) ? 'financas' : ui.aba === 'cidades' ? 'planos' : ui.aba;
   document.querySelectorAll('.nav button').forEach(b => b.classList.toggle('ativo', b.dataset.v === abaMenu));
-  const views = { inicio: vInicio, financas: vFinancas, extratos: vExtratos, planos: vPlanos, dados: vDados, categorias: vCategorias, cidades: vCidades, revisao: vRevisao, contas: vContas };
+  const views = { inicio: vInicio, financas: vFinancas, extratos: vExtratos, planos: vPlanos, dados: vDados, categorias: vCategorias, cidades: vCidades, revisao: vRevisao, contas: vContas, agenda: vAgenda };
   const tela = ui.aba + '|' + (ui.aba === 'planos' ? ui.plano || '' : ui.aba === 'extratos' && ui.naTriagem ? 'triagem' : ui.aba === 'extratos' ? ui.lote || '' : '');
   const trocou = tela !== render.tela; render.tela = tela;
   const app = $('#app');
@@ -346,6 +346,7 @@ function vInicio() {
   return `
     ${avisoTriagem()}
     ${avisoCidadesGlobal()}
+    ${avisoAgenda()}
     <div class="hero">
       <div class="hero-txt">
         <p class="ola">Olá, ${esc(App.usuario?.nome?.split(' ')[0] || 'Gustavo')}</p>
@@ -394,6 +395,8 @@ function vFinancas() {
   const rec = soma(valem.filter(x => x.tipo === 'receita'), x => x.valor);
   const des = soma(valem.filter(x => x.tipo === 'despesa'), x => x.valor);
   const trEntrou = soma(tr.filter(x => x.tipo === 'receita'), x => x.valor), trSaiu = soma(tr.filter(x => x.tipo === 'despesa'), x => x.valor);
+  const futuros = pendentesNoMes(ui.mes);
+  const aPagar = soma(futuros.filter(o => o.a.tipo === 'despesa'), o => o.a.valor), aReceber = soma(futuros.filter(o => o.a.tipo === 'receita'), o => o.a.valor);
   const porCat = {};
   valem.filter(x => x.tipo === 'despesa').forEach(x => porCat[x.categoria] = (porCat[x.categoria] || 0) + x.valor);
   const cats = Object.entries(porCat).sort((a, b) => b[1] - a[1]);
@@ -403,6 +406,7 @@ function vFinancas() {
   const [ano, mes] = ui.mes.split('-');
   return `
     ${avisoTriagem()}
+    ${avisoAgenda()}
     <div class="topo">
       <div><h1>Finanças</h1><p class="sub" style="margin:0">Seu extrato de receitas e despesas</p></div>
       <div class="mes-nav">
@@ -419,6 +423,8 @@ function vFinancas() {
           <span class="chip"><i class="seta pos">${IC.receita}</i>Receitas <b>${din(rec)}</b></span>
           <span class="chip"><i class="seta neg">${IC.despesa}</i>Despesas <b>${din(des)}</b></span>
           <span class="chip">Economia <b>${rec ? ((rec - des) / rec * 100).toFixed(0) : 0}%</b></span>
+          ${aPagar ? `<span class="chip" title="Agendados ainda não confirmados: não entram no saldo">📅 A pagar <b>${din(aPagar)}</b></span>` : ''}
+          ${aReceber ? `<span class="chip" title="Agendados ainda não confirmados: não entram no saldo">📅 A receber <b>${din(aReceber)}</b></span>` : ''}
           ${tr.length ? `<span class="chip" title="Não entram no saldo">🔄 Entre contas <b>${trEntrou ? '+' + din(trEntrou) : ''}${trEntrou && trSaiu ? ' / ' : ''}${trSaiu ? '−' + din(trSaiu) : ''}</b></span>` : ''}
         </div>
       </div>
@@ -430,6 +436,7 @@ function vFinancas() {
       <button class="btn" data-a="exportarCSV">Exportar planilha</button>
       <button class="btn" data-a="importarExtrato">Importar extrato do banco</button>
       <button class="btn" data-a="importarCSV">Importar planilha</button>
+      <button class="btn" data-a="aba" data-v="agenda">📅 Lançamentos futuros</button>
       <button class="btn" data-a="aba" data-v="contas">🏦 Conta corrente</button>
       <button class="btn" data-a="aba" data-v="revisao">🔎 Revisar categoria</button>
       <button class="btn" data-a="aba" data-v="categorias">🏷️ Categorias</button>
@@ -1015,8 +1022,8 @@ function vCategorias() {
       <div class="acoes"><button class="btn" data-a="aba" data-v="revisao">🔎 Revisar lançamentos</button>
         <button class="btn pri" data-a="novaCat">+ Nova categoria</button></div>
     </div>
-    ${App.modo === 'nuvem' && App.categoriasSemNuvem ? `<p class="tri-aviso forte" style="margin:0 0 16px">⚠️ As categorias estão salvas só neste aparelho:
-      ${App.categoriasSemNuvem === 'regras' ? 'falta atualizar as regras do Firebase (veja o CONFIGURAR.md).' : 'não foi possível falar com a nuvem.'}</p>` : ''}
+    ${App.modo === 'nuvem' && App.semNuvem.categorias ? `<p class="tri-aviso forte" style="margin:0 0 16px">⚠️ As categorias estão salvas só neste aparelho:
+      ${App.semNuvem.categorias === 'regras' ? 'falta atualizar as regras do Firebase (veja o CONFIGURAR.md).' : 'não foi possível falar com a nuvem.'}</p>` : ''}
     ${grupo('Despesas', lista.filter(c => c.tipo === 'despesa'))}
     ${grupo('Receitas', lista.filter(c => c.tipo === 'receita'))}
     ${grupo('Servem para os dois', lista.filter(c => c.tipo === 'ambos'))}
@@ -1378,7 +1385,7 @@ ${usados.length === 1 ? 'O lançamento que usa' : `Os ${usados.length} lançamen
   },
 };
 
-Object.assign(acoes, acoesCidades, acoesRevisao, acoesContas);
+Object.assign(acoes, acoesCidades, acoesRevisao, acoesContas, acoesAgenda);
 
 document.addEventListener('click', e => {
   const el = e.target.closest('[data-a]'); if (!el) return;
@@ -1463,31 +1470,37 @@ App.carregando = () => {
   render();
 };
 // Triagem vinda da nuvem (de qualquer aparelho).
-// Categorias vindas da nuvem.
-App.receberCategorias = docs => {
-  db.categorias = docs; versaoCats++;
-  // Categorias criadas enquanto a nuvem recusava (regras antigas) estavam só neste aparelho: junta e envia.
+/* Coleções "extras" da nuvem (categorias, agendados): chegam por conta própria e, se as regras do
+   Firebase ainda não as aceitarem, ficam salvas neste aparelho até a regra existir. */
+const EXTRAS = { categorias: 'apg-categorias', agendados: 'apg-agendados' };
+App.semNuvem = {}; App.extrasPendentes = {};
+App.receberExtra = (c, docs) => {
+  db[c] = docs;
+  if (c === 'categorias') versaoCats++;
+  // O que foi criado enquanto a nuvem recusava estava só neste aparelho: junta e envia.
   let local = null;
-  try { local = JSON.parse(localStorage.getItem('apg-categorias')); } catch (e) { /* sem armazenamento */ }
+  try { local = JSON.parse(localStorage.getItem(EXTRAS[c])); } catch (e) { /* sem armazenamento */ }
   if (Array.isArray(local) && local.length) {
     const ids = new Set(docs.map(d => d.id));
-    const faltam = local.filter(c => c && c.id && !ids.has(c.id));
-    if (faltam.length) { db.categorias = [...docs, ...faltam]; App.catsPendentes = true; }
-    else try { localStorage.removeItem('apg-categorias'); } catch (e) { /* sem armazenamento */ }
+    const faltam = local.filter(x => x && x.id && !ids.has(x.id));
+    if (faltam.length) { db[c] = [...docs, ...faltam]; App.extrasPendentes[c] = true; }
+    else try { localStorage.removeItem(EXTRAS[c]); } catch (e) { /* sem armazenamento */ }
   }
-  if (App.modo === 'nuvem') { enviarCatsPendentes(); renderSeguro(); }
+  if (App.modo === 'nuvem') { enviarExtrasPendentes(); renderSeguro(); }
 };
-function enviarCatsPendentes() {
-  if (!App.catsPendentes) return;
-  App.catsPendentes = false;
+function enviarExtrasPendentes() {
+  const cs = Object.keys(App.extrasPendentes).filter(c => App.extrasPendentes[c]);
+  if (!cs.length) return;
+  App.extrasPendentes = {};
   salvar();
-  try { localStorage.removeItem('apg-categorias'); } catch (e) { /* sem armazenamento */ }
+  cs.forEach(c => { try { localStorage.removeItem(EXTRAS[c]); } catch (e) { /* sem armazenamento */ } });
 }
-App.semCategoriasNaNuvem = e => {
+App.semExtraNaNuvem = (c, e) => {
   console.error(e);
-  if (App.categoriasSemNuvem) return;
-  App.categoriasSemNuvem = e && e.code === 'permission-denied' ? 'regras' : 'erro';
-  try { db.categorias = JSON.parse(localStorage.getItem('apg-categorias')) || db.categorias || []; } catch (x) { /* sem armazenamento */ }
+  if (App.semNuvem[c]) return;
+  App.semNuvem[c] = e && e.code === 'permission-denied' ? 'regras' : 'erro';
+  try { db[c] = JSON.parse(localStorage.getItem(EXTRAS[c])) || db[c] || []; } catch (x) { /* sem armazenamento */ }
+  if (c === 'categorias') versaoCats++;
   renderSeguro();
 };
 App.receberTriagem = t => {
@@ -1533,9 +1546,10 @@ App.receber = (colecao, docs, pronto) => {
         confirm('Encontramos dados salvos neste aparelho. Enviar para a nuvem?')) {
       db.lancamentos = local.lancamentos; db.planos = local.planos;
       if (!(db.categorias || []).length) db.categorias = local.categorias || [];
+      if (!(db.agendados || []).length) db.agendados = local.agendados || [];
       salvar();
     }
-    enviarCatsPendentes();
+    enviarExtrasPendentes();
     if (qtdPendCid()) setTimeout(sincronizarCidades, 500);   // alterações de cidades que ficaram na fila
   }
   renderSeguro();

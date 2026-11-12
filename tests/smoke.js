@@ -29,8 +29,8 @@ const FIREBASE_FALSO = {
   'firebase-firestore.js': `
     // Banco em memória. window.__seed permite começar com dados de "outro aparelho".
     const seed = window.__seed || {};
-    const store = { lancamentos: new Map(seed.lancamentos || []), planos: new Map(seed.planos || []), triagens: new Map(seed.triagens || []), categorias: new Map(seed.categorias || []) };
-    const subs = { lancamentos: [], planos: [], triagens: [], categorias: [] }, docSubs = []; window.__store = store;
+    const store = { lancamentos: new Map(seed.lancamentos || []), planos: new Map(seed.planos || []), triagens: new Map(seed.triagens || []), categorias: new Map(seed.categorias || []), agendados: new Map(seed.agendados || []) };
+    const subs = { lancamentos: [], planos: [], triagens: [], categorias: [], agendados: [] }, docSubs = []; window.__store = store;
     window.__exportar = () => JSON.stringify(Object.fromEntries(Object.entries(store).map(([c, m]) => [c, [...m]])));
     export const initializeFirestore = () => ({}); export const persistentLocalCache = () => ({}); export const persistentMultipleTabManager = () => ({});
     export const collection = (f, c) => c; export const doc = (f, c, id) => ({ c, id });
@@ -46,7 +46,7 @@ const FIREBASE_FALSO = {
     export const deleteDoc = async r => { if (window.__semRegraTriagem) throw { code: 'permission-denied', message: 'negado' }; store[r.c].delete(r.id); setTimeout(emitDocs, 0); };
     export const writeBatch = () => { const ops = []; return {
       set: (r, d) => ops.push(() => store[r.c].set(r.id, d)), delete: r => ops.push(() => store[r.c].delete(r.id)),
-      commit: async () => { ops.forEach(o => o()); setTimeout(() => { emit('lancamentos'); emit('planos'); emit('categorias'); }, 0); } }; };`,
+      commit: async () => { ops.forEach(o => o()); setTimeout(() => { emit('lancamentos'); emit('planos'); emit('categorias'); emit('agendados'); }, 0); } }; };`,
 };
 
 // Escolhe uma categoria no seletor (botão que abre a lista com ícones).
@@ -501,6 +501,73 @@ async function revisaoEContas(navegador, url, erros) {
   await ctx.close();
 }
 
+// Lançamentos futuros: recorrente até uma data e data única; só entram no saldo ao confirmar.
+async function lancamentosFuturos(navegador, url, erros) {
+  console.log('Lançamentos futuros');
+  const ctx = await navegador.newContext();
+  await ctx.route('**/firebase-config.js', r => r.fulfill({ contentType: 'text/javascript', body: 'window.FIREBASE_CONFIG = null;' }));
+  const p = await ctx.newPage();
+  p.on('pageerror', e => erros.push('agenda: ' + e.message));
+  p.on('dialog', d => d.accept());
+  await p.goto(url);
+  const dados = () => p.evaluate(() => JSON.parse(localStorage.getItem('apg-dados-v1')));
+  const datas = await p.evaluate(() => ({ hoje: hoje(), doisMesesAtras: somaDias(hoje(), -61), daqui10: somaDias(hoje(), 10), daqui4meses: somaDias(hoje(), 120) }));
+
+  await p.click('.nav >> text=Finanças');
+  await p.click('text=📅 Lançamentos futuros');
+  // Recorrente: todo mês, começando há ~2 meses, até daqui a 4 meses.
+  await p.click('[data-a=agNovo]');
+  await p.fill('dialog [name=desc]', 'Aluguel');
+  await p.fill('dialog [name=valor]', '1300');
+  await escolher(p, 'dialog [name=categoria]', 'Moradia');
+  await p.check('dialog [name=repete][value=mensal]', { force: true });
+  await p.fill('dialog [name=inicio]', datas.doisMesesAtras);
+  await p.fill('dialog [name=ate]', datas.daqui4meses);
+  await p.click('dialog >> text=Salvar');
+  // Data única no futuro.
+  await p.click('[data-a=agNovo]');
+  await p.fill('dialog [name=desc]', 'IPVA');
+  await p.fill('dialog [name=valor]', '900');
+  await p.check('dialog [name=repete][value=nao]', { force: true });
+  await p.fill('dialog [name=inicio]', datas.daqui10);
+  await p.click('dialog >> text=Salvar');
+
+  let d = await dados();
+  confere(d.agendados.length === 2 && d.lancamentos.length === 0, 'agendar não lança nada nas finanças');
+  const vencidos = await p.locator('.ag-aviso [data-a=agConfirmar]').count();
+  confere(vencidos >= 2 && vencidos <= 3, 'ocorrências que já venceram pedem confirmação');
+  confere(await p.isVisible('text=IPVA') && await p.isVisible('text=Em 10 dias'), 'data futura aparece nos próximos, sem pedir confirmação');
+
+  await p.locator('.ag-aviso [data-a=agConfirmar]').first().click();
+  await p.fill('dialog [name=valor]', '1350');
+  await p.click('dialog >> text=✓ Confirmar');
+  d = await dados();
+  confere(d.lancamentos.length === 1 && d.lancamentos[0].valor === 1350 && d.lancamentos[0].categoria === 'Moradia', 'confirmar cria o lançamento com o valor pago');
+  await p.locator('.ag-aviso [data-a=agPular]').first().click();
+  d = await dados();
+  confere(d.lancamentos.length === 1 && Object.values(d.agendados.find(a => a.desc === 'Aluguel').feitos).some(f => f.estado === 'pulado'), 'pular marca a ocorrência sem lançar');
+
+  // Já lançado pelo extrato: confirmar só marca como pago.
+  const restante = await p.locator('.ag-aviso [data-a=agConfirmar]').count();
+  if (restante) {
+    await p.evaluate(() => {
+      const d = JSON.parse(localStorage.getItem('apg-dados-v1'));
+      const o = vencidos()[0];
+      d.lancamentos.push({ id: 'do-extrato', tipo: 'despesa', desc: 'Imobiliária', categoria: 'Moradia', valor: 1300, data: o.data, banco: 'Inter', meio: 'debito' });
+      localStorage.setItem('apg-dados-v1', JSON.stringify(d));
+    });
+    await p.reload();
+    await p.click('.nav >> text=Início');
+    await p.locator('.ag-aviso [data-a=agConfirmar]').first().click();
+    confere(await p.isVisible('dialog >> text=Já existe um lançamento parecido'), 'avisa quando o pagamento já veio pelo extrato');
+    await p.click('dialog >> text=✓ Confirmar');
+    d = await dados();
+    confere(d.lancamentos.length === 2, 'marcar como pago não duplica o lançamento');
+  }
+  confere(!(await p.isVisible('.ag-aviso')), 'sem nada vencido, o aviso some');
+  await ctx.close();
+}
+
 async function modoNuvem(navegador, url, erros) {
   console.log('Modo nuvem (Firebase simulado)');
   const ctx = await navegador.newContext();
@@ -552,6 +619,7 @@ async function modoNuvem(navegador, url, erros) {
     await modoLocal(navegador, url, erros);
     await importacaoExtrato(navegador, url, erros);
     await revisaoEContas(navegador, url, erros);
+    await lancamentosFuturos(navegador, url, erros);
     await modoNuvem(navegador, url, erros);
     await triagemEntreAparelhos(navegador, url, erros);
     await cidadesPlanilha(navegador, url, erros);

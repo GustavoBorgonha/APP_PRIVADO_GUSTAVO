@@ -25,7 +25,8 @@ async function iniciar() {
   // Cache local: o app continua funcionando sem internet e sincroniza depois.
   const fs = F.initializeFirestore(app, { localCache: F.persistentLocalCache({ tabManager: F.persistentMultipleTabManager() }) });
 
-  const enviado = { lancamentos: new Map(), planos: new Map(), categorias: new Map() }; // id -> JSON já sincronizado
+  const EXTRAS = ['categorias', 'agendados'];   // coleções que podem ainda não estar nas regras do Firebase
+  const enviado = { lancamentos: new Map(), planos: new Map(), categorias: new Map(), agendados: new Map() }; // id -> JSON já sincronizado
   let escutas = [];
 
   App.entrar = () => A.signInWithPopup(auth, new A.GoogleAuthProvider()).catch(e => {
@@ -37,7 +38,7 @@ async function iniciar() {
   // As categorias vão num lote separado: se as regras ainda não aceitarem, os lançamentos não são afetados.
   App.sincronizar = db => {
     gravar(COLECOES, db, e => { console.error(e); alert('Não foi possível salvar na nuvem: ' + e.message); });
-    if (!App.categoriasSemNuvem) gravar(['categorias'], db, e => App.semCategoriasNaNuvem(e));
+    EXTRAS.forEach(c => { if (!App.semNuvem[c]) gravar([c], db, e => App.semExtraNaNuvem(c, e)); });
   };
   function gravar(colecoes, db, erro) {
     const ops = [];
@@ -73,15 +74,17 @@ async function iniciar() {
     App.carregando();
     const recebido = {};
     let negado = false;
-    App.triagemSemNuvem = null; App.categoriasSemNuvem = null;
-    let catRecebidas = false;
-    escutas.push(F.onSnapshot(F.collection(fs, 'categorias'), snap => {
-      const docs = snap.docs.map(d => ({ ...d.data(), id: d.id }));
-      const novo = new Map(docs.map(x => [x.id, estavel(x)]));
-      const eco = catRecebidas && novo.size === enviado.categorias.size && [...novo].every(([id, j]) => enviado.categorias.get(id) === j);
-      enviado.categorias = novo; catRecebidas = true;
-      if (!eco) App.receberCategorias(docs);
-    }, e => App.semCategoriasNaNuvem(e)));
+    App.triagemSemNuvem = null; App.semNuvem = {};
+    EXTRAS.forEach(c => {
+      let recebeu = false;
+      escutas.push(F.onSnapshot(F.collection(fs, c), snap => {
+        const docs = snap.docs.map(d => ({ ...d.data(), id: d.id }));
+        const novo = new Map(docs.map(x => [x.id, estavel(x)]));
+        const eco = recebeu && novo.size === enviado[c].size && [...novo].every(([id, j]) => enviado[c].get(id) === j);
+        enviado[c] = novo; recebeu = true;
+        if (!eco) App.receberExtra(c, docs);
+      }, e => App.semExtraNaNuvem(c, e)));
+    });
     escutas.push(F.onSnapshot(refTriagem, snap => App.receberTriagem(snap.exists() ? snap.data().dados : null),
       e => App.semTriagemNaNuvem(e)));
     COLECOES.forEach(c => escutas.push(F.onSnapshot(F.collection(fs, c), snap => {

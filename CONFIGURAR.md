@@ -59,3 +59,5 @@ Sempre que o arquivo [`firestore.rules`](firestore.rules) mudar, cole a versão 
   aparelho. Sem ela, a triagem funciona, mas fica salva só no aparelho onde começou.
 - Novembro/2026: entrou a regra `categorias`, para as categorias criadas valerem em todos os
   aparelhos. Sem ela, as categorias ficam salvas só no aparelho onde foram criadas.
+- Novembro/2026: entrou a regra `agendados` (lançamentos futuros). Sem ela, os agendamentos ficam
+  salvos só no aparelho onde foram criados.

@@ -1032,3 +1032,20 @@ a.btn { text-decoration: none; color: var(--text); display: inline-flex; align-i
 .cc-saldo { color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .cc-n { display: inline-grid; place-items: center; min-width: 22px; height: 20px; padding: 0 6px; margin-left: 4px; border-radius: 99px; background: var(--soft-2); color: var(--text); font-size: 11.5px; font-weight: 600; }
 .btn.pri .cc-n { background: color-mix(in srgb, var(--ink-text) 22%, transparent); color: inherit; }
+
+/* Lançamentos futuros (agenda) */
+.ag-aviso { border-color: color-mix(in srgb, var(--acento) 40%, transparent); background: linear-gradient(var(--acento-suave), var(--acento-suave)), var(--card); }
+.ag-aviso .mov:hover { background: var(--card); }
+.ag-linha { cursor: default; flex-wrap: wrap; }
+.ag-linha .mov-txt { cursor: pointer; }
+.ag-linha.atrasado .mov-txt small { color: var(--red); font-weight: 500; }
+.ag-botoes { display: flex; gap: 6px; margin-left: 4px; }
+.ag-fim { opacity: .55; }
+.escolhas.quatro { grid-template-columns: repeat(4, 1fr); }
+.escolhas.quatro .escolha > span { align-items: center; justify-content: center; padding: 10px 4px; text-align: center; }
+@media (max-width: 520px) {
+  .escolhas.quatro { grid-template-columns: 1fr 1fr; }
+  .ag-botoes { width: 100%; justify-content: flex-end; }
+}
+.escolhas.duas { grid-template-columns: 1fr 1fr; }
+.escolhas.duas .escolha > span { align-items: center; justify-content: center; padding: 10px 6px; }

@@ -26,6 +26,7 @@ jobs:
           node --check extrato.js
           node --check cidades.js
           node --check revisao.js
+          node --check agenda.js
           node --check planilha-config.js
           node --check sw.js
           node --check firebase-config.js

@@ -10,7 +10,8 @@ PWA em JavaScript puro (sem framework, sem build) para finanças pessoais e plan
   Netlify em novembro/2026 por causa do limite de créditos do plano grátis.
 - **Login e dados:** Firebase (projeto `projetogustavoapp-88b20`): login Google + Cloud Firestore.
   - Coleções: `lancamentos`, `planos` (dados compartilhados entre os usuários autorizados),
-    `triagens` (triagem de extrato em andamento), `categorias` (categorias criadas/editadas) e
+    `triagens` (triagem de extrato em andamento), `categorias` (categorias criadas/editadas),
+    `agendados` (lançamentos futuros) e
     `acesso/permitidos` (campo `emails`: lista de quem pode entrar, editada só pelo console).
   - Regras em `firestore.rules`. Se mudarem, o Gustavo precisa colar no console do Firebase
     (aba Regras) — não há deploy automático das regras.
@@ -65,6 +66,13 @@ PWA em JavaScript puro (sem framework, sem build) para finanças pessoais e plan
   pelo histórico sem contar a própria categoria (`memoriaHistorico(filtro)`), com "Aplicar sugestões".
   **Conta corrente** (`vContas`, aba `contas`): cada conta = banco + meio + titular (`chaveConta`), lista
   cada movimento (inclusive transferências) com o saldo depois dele; saldo começa em zero no 1º lançamento.
+- `agenda.js` — **Lançamentos futuros** (aba interna `agenda`, aberta por Finanças): `db.agendados` (coleção
+  `agendados`), cada um uma regra (`inicio`, `repete`: nao/mensal/semanal/anual, `ate` opcional) com `feitos`
+  por data (`pago` com `lancId` ou `pulado`). Ocorrências (`ocorrencias`/`vencidos`) NÃO entram no saldo; as
+  vencidas aparecem em "🔔 para confirmar" (Início, Finanças, agenda). Confirmar cria o lançamento (com
+  `agendaId`) ou, se já veio pelo extrato (`jaLancado`: mesmo valor/tipo, ±5 dias), só marca como pago.
+  Finanças mostra "📅 A pagar/A receber" do mês. Coleções extras da nuvem (`EXTRAS`: categorias, agendados)
+  caem para o aparelho se as regras recusarem (`App.semNuvem`).
 - `cidades.js` + `planilha-config.js` — tela "Cidades de SC" (aba interna `cidades`, entrada pelo cartão em
   Planos), espelho da planilha do Google "Cidades_SC_visitadas" (aba Cidades). A planilha é a fonte: o app
   fala com ela por uma ponte em Apps Script (`apps-script/Codigo.gs`, publicada como App da Web; a URL vai em
