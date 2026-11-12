@@ -374,7 +374,7 @@ async function cidadesPlanilha(navegador, url, erros) {
     if (!leafletDir || !fs.existsSync(path.join(leafletDir, arq))) return r.abort();
     r.fulfill({ body: fs.readFileSync(path.join(leafletDir, arq)), contentType: arq.endsWith('.css') ? 'text/css' : 'text/javascript', headers: { 'access-control-allow-origin': '*' } });
   });
-  await ctx.route(/basemaps\.cartocdn\.com/, r => r.abort());
+  await ctx.route(/tile\.openstreetmap\.org/, r => r.abort());
   const p = await ctx.newPage();
   p.on('pageerror', e => erros.push('cidades: ' + e.message));
   p.on('dialog', d => d.accept());

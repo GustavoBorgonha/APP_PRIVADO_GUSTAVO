@@ -165,7 +165,7 @@ function cartaoCidades() {
   </div>`;
 }
 
-/* ---------- mapa estilo "Maps" (Leaflet + mapa base do OpenStreetMap/CARTO) ----------
+/* ---------- mapa estilo "Maps" (Leaflet + mapa base do OpenStreetMap) ----------
    A biblioteca só é baixada quando a tela de cidades abre. O mapa é criado uma vez e
    reaproveitado entre um redesenho e outro (não perde o zoom nem pisca). Sem internet
    para baixar o mapa, cai no mapa simples de pontos (mapaCidades). */
@@ -186,13 +186,14 @@ function carregarLeaflet() {
   return promessaLeaflet;
 }
 const temaEscuro = matchMedia('(prefers-color-scheme: dark)');
+// Mapa base do OpenStreetMap (grátis, sem chave). No tema escuro, as imagens são escurecidas por CSS.
 function fundoDoMapa() {
   if (!Cid.mapa) return;
-  if (Cid.fundo) Cid.mapa.removeLayer(Cid.fundo);
-  const estilo = temaEscuro.matches ? 'dark_all' : 'rastertiles/voyager';
-  Cid.fundo = L.tileLayer(`https://{s}.basemaps.cartocdn.com/${estilo}/{z}/{x}/{y}{r}.png`, {
-    subdomains: 'abcd', maxZoom: 19, detectRetina: true,
-    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions" target="_blank" rel="noopener">CARTO</a>',
+  Cid.mapaEl.classList.toggle('escuro', temaEscuro.matches);
+  if (Cid.fundo) return;
+  Cid.fundo = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    maxZoom: 19,
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a>',
   }).addTo(Cid.mapa);
 }
 temaEscuro.addEventListener?.('change', fundoDoMapa);

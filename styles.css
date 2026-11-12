@@ -1013,3 +1013,6 @@ a.btn { text-decoration: none; color: var(--text); display: inline-flex; align-i
 }
 .cid-mapa-base.leaflet-container { background: var(--soft); }
 .cid-mapa-base .cid-pino:focus, .cid-mapa-base .cid-pino:focus-visible { outline: none; }
+
+/* Tema escuro: escurece o mapa do OpenStreetMap (as cidades marcadas não são afetadas) */
+.cid-mapa-base.escuro .leaflet-tile-pane { filter: invert(1) hue-rotate(180deg) brightness(.92) contrast(.88) saturate(.5); }
