@@ -25,11 +25,14 @@
       const d = campo(b, 'DTPOSTED'), v = parseFloat(campo(b, 'TRNAMT').replace(',', '.'));
       if (!/^\d{8}/.test(d) || !v) return;
       const memo = campo(b, 'MEMO'), nome = campo(b, 'NAME');
+      // Horário: alguns bancos mandam data+hora (AAAAMMDDHHMMSS). O Inter manda só a data.
+      const dh = /^\d{12}/.test(campo(b, 'DTUSER')) ? campo(b, 'DTUSER') : d;
+      const hora = /^\d{12}/.test(dh) && dh.slice(8, 14) !== '000000' && dh.slice(8, 12) !== '1200' ? `${dh.slice(8, 10)}:${dh.slice(10, 12)}` : '';
       itens.push({
         origem: 'ofx:' + (campo(b, 'FITID') || `${d}|${v}|${memo}`),
         data: `${d.slice(0, 4)}-${d.slice(4, 6)}-${d.slice(6, 8)}`,
         valor: Math.abs(v), tipo: v < 0 ? 'despesa' : 'receita',
-        bruto: memo || nome, memo, nome,
+        bruto: memo || nome, memo, nome, hora,
       });
     });
     return itens;
@@ -153,7 +156,7 @@
       if (proprio) avisos.push('Seu nome aparece no movimento: sugeri "Transferência entre contas", que não entra no saldo.');
       if (ctx.meio === 'credito' && it.tipo === 'receita' && /pagamento|pagto/.test(texto)) avisos.push('Pagamento da fatura: normalmente se ignora aqui, porque as compras já estão lançadas uma a uma.');
       else if (/fatura/.test(texto)) avisos.push('Pagamento de fatura: cuidado para não contar as compras do cartão duas vezes.');
-      return { id: 't' + i, origem: it.origem, data: it.data, valor: it.valor, tipo: it.tipo, bruto: it.bruto, desc, categoria, fixo: false, avisos,
+      return { id: 't' + i, origem: it.origem, data: it.data, hora: it.hora || '', valor: it.valor, tipo: it.tipo, bruto: it.bruto, desc, categoria, fixo: false, avisos,
         banco: ctx.banco || '', meio: ctx.meio === 'credito' ? 'credito' : 'debito', estado: antigo ? 'duplicado' : 'pendente', _texto: texto };
     });
 
@@ -170,5 +173,25 @@
     return out.sort((a, b) => b.data.localeCompare(a.data));
   }
 
-  g.Extrato = { decodificar, lerOFX, lerCSVBanco, lerArquivo, detectar, preparar, descricao, BANCOS };
+  /* Detalhes que dá para tirar do texto do banco (não vêm em campo próprio no extrato):
+     - CPF/CNPJ completos, quando aparecem (alguns bancos mascaram: ***.123.456-**);
+     - raiz do CNPJ (8 dígitos) colada no nome, comum em MEI ("51245806Larissa");
+     - no Pix do Inter, "Cp :60701190-" é o código (ISPB) do banco do outro lado. */
+  const ISPB = { '00000000': 'Banco do Brasil', '00360305': 'Caixa', '00416968': 'Inter', '60701190': 'Itaú', '60746948': 'Bradesco',
+    '90400888': 'Santander', '18236120': 'Nubank', '31872495': 'C6 Bank', '10573521': 'Mercado Pago', '22896431': 'PicPay',
+    '08561701': 'PagBank', '92702067': 'Banrisul', '01181521': 'Sicredi', '02038232': 'Sicoob' };
+  const fmtCNPJ = d => `${d.slice(0, 2)}.${d.slice(2, 5)}.${d.slice(5, 8)}/${d.slice(8, 12)}-${d.slice(12)}`;
+  const fmtCPF = d => `${d.slice(0, 3)}.${d.slice(3, 6)}.${d.slice(6, 9)}-${d.slice(9)}`;
+  function detalhes(texto) {
+    const t = String(texto || ''), out = {};
+    let m = t.match(/\b(\d{2}\.?\d{3}\.?\d{3}\/?\d{4}-?\d{2})\b/);
+    if (m) out.documento = 'CNPJ ' + fmtCNPJ(m[1].replace(/\D/g, ''));
+    if (!out.documento && (m = t.match(/(\*{3}\.\d{3}\.\d{3}-\*{2})/))) out.documento = 'CPF ' + m[1];
+    if (!out.documento && (m = t.match(/\b(\d{3}\.\d{3}\.\d{3}-\d{2})\b/))) out.documento = 'CPF ' + m[1];
+    if (!out.documento && (m = t.match(/\b(\d{8})(?=[A-Za-zÀ-ú])/)) && !/cp\s*:\s*$/i.test(t.slice(0, m.index))) out.documento = `CNPJ ${m[1].slice(0, 2)}.${m[1].slice(2, 5)}.${m[1].slice(5)}/…`;
+    if ((m = t.match(/cp\s*:\s*(\d{8})\s*-/i))) { if (ISPB[m[1]]) out.instituicao = ISPB[m[1]]; }
+    return out;
+  }
+
+  g.Extrato = { detalhes, decodificar, lerOFX, lerCSVBanco, lerArquivo, detectar, preparar, descricao, BANCOS };
 })(typeof window !== 'undefined' ? window : globalThis);

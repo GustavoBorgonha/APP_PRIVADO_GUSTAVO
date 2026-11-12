@@ -34,8 +34,8 @@ function cartaoRevisao(l) {
   return `<div class="card tri rev">
     <div class="tri-topo">
       <span class="mov-ic ${l.tipo}">${iconeCat(e.categoria || sug || l.categoria, l.tipo)}</span>
-      <div class="tri-orig"><small>${fmtData(l.data)}${rotuloOrigem(l) ? ' · ' + esc(rotuloOrigem(l)) : ''}</small>
-        <span>${esc(l.bruto || l.desc)}</span></div>
+      <div class="tri-orig"><small>${fmtData(l.data)}${l.hora ? ' · ' + l.hora : ''}${rotuloOrigem(l) ? ' · ' + esc(rotuloOrigem(l)) : ''}</small>
+        <span>${esc(l.bruto || l.desc)}</span>${linhaDetalhes(l)}</div>
       <strong class="tri-valor ${l.tipo === 'receita' ? 'pos' : ''}">${l.tipo === 'receita' ? '+' : '−'} ${din(l.valor)}</strong>
     </div>
     ${sug ? `<p class="rev-sug">💡 Pelo seu histórico, parece <b>${esc(sug)}</b>. Já deixei escolhido.</p>` : ''}

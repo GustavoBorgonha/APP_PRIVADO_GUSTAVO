@@ -59,7 +59,11 @@ PWA em JavaScript puro (sem framework, sem build) para finanças pessoais e plan
   "⚡ Triagem automática" (`modalTriagemAuto`/`planoTriagemAuto`): refaz descrição/categoria pelo histórico
   (`memoriaHistorico`: mesmo texto do banco → `bruto` salvo no lançamento; depois descrição e "chave" do
   estabelecimento, `chaveMov`) e confirma de uma vez; estornos são ignorados; valor já lançado, fatura e dados
-  faltando ficam para revisar. Não mexe no que foi editado à mão (`catManual`/`descManual`). Não versionar extratos reais; os testes usam
+  faltando ficam para revisar. Não mexe no que foi editado à mão (`catManual`/`descManual`).
+  Detalhes nos cartões (triagem e revisão): `hora` (só se o OFX trouxer DTPOSTED/DTUSER com horário; o Inter
+  não traz) e `Extrato.detalhes(bruto)`: CPF/CNPJ que aparecer no texto, raiz do CNPJ colada no nome (MEI) e
+  banco do outro lado do Pix pelo código ISPB em "Cp :XXXXXXXX-" (tabela `ISPB`). O extrato do Inter não traz
+  o CPF/CNPJ da outra parte. Não versionar extratos reais; os testes usam
   extratos de mentira.
 - `revisao.js` — duas telas internas abertas por Finanças: **Revisar categoria** (`vRevisao`, aba `revisao`):
   período + categoria → cartões estilo triagem para trocar categoria/descrição e confirmar ou pular; sugere

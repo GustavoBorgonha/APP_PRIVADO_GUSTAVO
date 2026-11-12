@@ -298,6 +298,17 @@ async function importacaoExtrato(navegador, url, erros) {
   const armazem = l.find(x => x.valor === 50);
   confere(armazem && armazem.categoria === 'Mercado' && l.some(x => x.valor === 30 && x.categoria === 'Outros'), 'triagem automática redistribui a categoria pelo histórico e confirma');
   confere(!l.some(x => x.valor === 20) && await p.locator('.tri').count() === 1 && await p.isVisible('.tri:has-text("ACADEMIA")'), 'estorno é ignorado e o valor já lançado fica para revisar');
+  await p.click('[data-a=cancelarImportacao]');
+
+  // Detalhes: horário (quando o banco manda) e CPF/CNPJ ou banco do Pix tirados do texto.
+  await importar('hora.ofx', `<OFX><BANKTRANLIST><STMTTRN><TRNTYPE>PAYMENT</TRNTYPE><DTPOSTED>20260415143200[-3:BRT]</DTPOSTED><TRNAMT>-13.98</TRNAMT><FITID>H1</FITID>
+<MEMO>Compra no debito: "No estabelecimento 51245806Larissa BOMBINHAS BRA"</MEMO></STMTTRN>
+<STMTTRN><TRNTYPE>PAYMENT</TRNTYPE><DTPOSTED>20260415</DTPOSTED><TRNAMT>-5.00</TRNAMT><FITID>H2</FITID>
+<MEMO>Pix enviado: "Cp :60701190-LANCHONETE TESTE"</MEMO></STMTTRN></BANKTRANLIST></OFX>`, 'Inter');
+  const cartaoLarissa = await p.textContent('.tri:has-text("Larissa")');
+  confere(cartaoLarissa.includes('14:32') && cartaoLarissa.includes('CNPJ 51.245.806'), 'mostra o horário e a raiz do CNPJ quando o extrato traz');
+  confere((await p.textContent('.tri:has-text("LANCHONETE TESTE")')).includes('Itaú'), 'mostra o banco do outro lado do Pix');
+  await p.click('[data-a=cancelarImportacao]');
   await ctx.close();
 }
 

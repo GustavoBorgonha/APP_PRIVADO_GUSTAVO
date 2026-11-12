@@ -1059,3 +1059,5 @@ a.btn { text-decoration: none; color: var(--text); display: inline-flex; align-i
 /* Pesquisa da tela de categorias */
 .busca-grande { margin: 0 0 18px; padding: 12px 16px; font-size: 15px; border-radius: 16px; }
 .cat-card[hidden], .cat-grupo[hidden] { display: none; }
+
+.mov-det { display: block; margin-top: 3px; color: var(--muted); font-size: 12px; }

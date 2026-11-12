@@ -469,7 +469,7 @@ function cartaoTriagem(i) {
   return `<div class="card tri">
     <div class="tri-topo">
       <span class="mov-ic ${i.tipo}">${iconeCat(i.categoria, i.tipo)}</span>
-      <div class="tri-orig"><small>No extrato · ${fmtData(i.data)}</small><span>${esc(i.bruto)}</span></div>
+      <div class="tri-orig"><small>No extrato · ${fmtData(i.data)}${i.hora ? ' · ' + i.hora : ''}</small><span>${esc(i.bruto)}</span>${linhaDetalhes(i)}</div>
       <strong class="tri-valor ${i.tipo === 'receita' ? 'pos' : ''}">${i.tipo === 'receita' ? '+' : '−'} ${din(i.valor)}</strong>
     </div>
     ${i.forcar ? '<p class="tri-aviso forte">⚠️ Este movimento já foi importado antes. Confirmar vai lançar de novo.</p>' : ''}
@@ -492,11 +492,19 @@ function cartaoTriagem(i) {
   </div>`;
 }
 
+// Linha com o que dá para saber além do texto: horário, CPF/CNPJ e banco do outro lado do Pix.
+function linhaDetalhes(x) {
+  const d = Extrato.detalhes(x.bruto), partes = [];
+  if (d.documento) partes.push(`🪪 ${esc(d.documento)}`);
+  if (d.instituicao) partes.push(`🏦 ${x.tipo === 'receita' ? 'veio do' : 'foi para o'} ${esc(d.instituicao)}`);
+  return partes.length ? `<small class="mov-det">${partes.join(' · ')}</small>` : '';
+}
+
 // Grava um item da triagem como lançamento (sem perguntas: quem chama já validou).
 function confirmarItem(i) {
   const t = ui.triagem, desc = String(i.desc || '').trim(), valor = Math.abs(parseValor(i.valor));
   const l = { id: uid(), tipo: i.tipo, desc, categoria: String(i.categoria || '').trim() || 'Outros', valor, data: i.data, fixo: !!i.fixo,
-    origem: i.origem, banco: t.banco, meio: t.meio, titular: t.titular || '', bruto: i.bruto || '',
+    origem: i.origem, banco: t.banco, meio: t.meio, titular: t.titular || '', bruto: i.bruto || '', hora: i.hora || '',
     lote: t.lote, loteArquivo: t.arquivo, loteEm: t.em };
   db.lancamentos.push(l);
   Object.assign(i, { estado: 'ok', lancId: l.id, desc, valor, categoria: l.categoria });
