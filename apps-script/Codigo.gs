@@ -30,7 +30,8 @@ function doGet() {
 function doPost(e) {
   try {
     const pedido = JSON.parse((e && e.postData && e.postData.contents) || '{}');
-    if (!conferirLogin(pedido.token)) return resposta({ ok: false, erro: 'nao-autorizado' });
+    const login = conferirLogin(pedido.token);
+    if (!login.ok) return resposta({ ok: false, erro: 'nao-autorizado', motivo: login.motivo });
     const aba = SpreadsheetApp.openById(PLANILHA_ID).getSheetByName(ABA);
     if (!aba) return resposta({ ok: false, erro: 'aba-nao-encontrada' });
     if (pedido.acao === 'salvar' && Array.isArray(pedido.mudancas) && pedido.mudancas.length) {
@@ -49,23 +50,28 @@ function resposta(obj) {
 }
 
 // Confere o login com o Firebase e se o e-mail está na lista. Guarda o resultado por 5 minutos.
+// Devolve { ok, motivo } — o motivo aparece no aviso do app quando algo dá errado.
 function conferirLogin(token) {
-  if (!token) return false;
+  if (!token) return { ok: false, motivo: 'O app não mandou o login.' };
   const cache = CacheService.getScriptCache();
   const chave = 'login_' + Utilities.base64EncodeWebSafe(Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, token));
-  if (cache.get(chave)) return true;
+  if (cache.get(chave)) return { ok: true };
   const r = UrlFetchApp.fetch('https://identitytoolkit.googleapis.com/v1/accounts:lookup?key=' + FIREBASE_API_KEY, {
     method: 'post', contentType: 'application/json', payload: JSON.stringify({ idToken: token }), muteHttpExceptions: true,
   });
-  if (r.getResponseCode() !== 200) return false;
-  const usuarios = JSON.parse(r.getContentText()).users || [];
-  const u = usuarios[0];
-  if (!u || !u.emailVerified) return false;
+  if (r.getResponseCode() !== 200) {
+    let detalhe = '';
+    try { detalhe = JSON.parse(r.getContentText()).error.message; } catch (e) { detalhe = r.getContentText().slice(0, 120); }
+    return { ok: false, motivo: 'O Firebase não confirmou o login (' + r.getResponseCode() + ' ' + detalhe + ').' };
+  }
+  const u = (JSON.parse(r.getContentText()).users || [])[0];
+  if (!u) return { ok: false, motivo: 'O Firebase não encontrou o usuário deste login.' };
+  if (!u.emailVerified) return { ok: false, motivo: 'O e-mail da conta não está verificado.' };
   const email = String(u.email || '').toLowerCase();
   const permitidos = EMAILS_PERMITIDOS.map(function (x) { return String(x).toLowerCase().trim(); });
-  if (permitidos.indexOf(email) < 0) return false;
+  if (permitidos.indexOf(email) < 0) return { ok: false, motivo: 'O e-mail ' + email + ' não está em EMAILS_PERMITIDOS no Apps Script.' };
   cache.put(chave, email, 300);
-  return true;
+  return { ok: true };
 }
 
 // Devolve todas as cidades como texto, do jeito que aparecem na planilha.

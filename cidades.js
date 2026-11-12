@@ -76,7 +76,7 @@ async function sincronizarCidades() {
     } finally { clearTimeout(tempo); }
     if (!r.ok) throw new Error(`A planilha respondeu com erro (${r.status}).`);
     const j = await r.json();
-    if (!j.ok) throw new Error(ERROS_PONTE[j.erro] || ('A planilha respondeu: ' + (j.erro || 'erro desconhecido')));
+    if (!j.ok) throw new Error(j.motivo ? 'A planilha recusou: ' + j.motivo : ERROS_PONTE[j.erro] || ('A planilha respondeu: ' + (j.erro || 'erro desconhecido')));
     // Tira da fila só o que foi enviado e não mudou de novo enquanto isso.
     mud.forEach(x => {
       const p = Cid.pend[x.municipio];
