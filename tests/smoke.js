@@ -24,7 +24,7 @@ const FIREBASE_FALSO = {
     let cb, user = null; export const getAuth = () => ({});
     export class GoogleAuthProvider {}
     export const onAuthStateChanged = (a, f) => { cb = f; setTimeout(() => f(user), 0); };
-    export const signInWithPopup = async () => { user = { displayName: 'Maria Teste', email: window.__email }; cb(user); };
+    export const signInWithPopup = async () => { user = { displayName: 'Maria Teste', email: window.__email, getIdToken: async () => 'token-teste' }; cb(user); };
     export const signOut = async () => { user = null; cb(null); };`,
   'firebase-firestore.js': `
     // Banco em memória. window.__seed permite começar com dados de "outro aparelho".
@@ -343,6 +343,74 @@ async function triagemEntreAparelhos(navegador, url, erros) {
   await ctx.close();
 }
 
+// Cidades: tela espelho da planilha, com a "ponte" (Apps Script) simulada.
+async function cidadesPlanilha(navegador, url, erros) {
+  console.log('Cidades sincronizadas com a planilha (ponte simulada)');
+  const PONTE = 'https://script.google.com/macros/s/TESTE/exec';
+  const planilha = [
+    ['Blumenau', 'Blumenau (Médio Vale do Itajaí)', 'Vale do Itajaí', 'Sim', '', '', '-26,9155', '-49,0709'],
+    ['Rio do Sul', 'Rio do Sul (Alto Vale do Itajaí)', 'Vale do Itajaí', 'Sim', '', 'minha cidade', '-27,2156', '-49,6430'],
+    ['Lages', 'Campos de Lages (Serra Catarinense)', 'Serrana', 'Não', '', '', '-27,8150', '-50,3259'],
+    ['Chapecó', 'Chapecó (Oeste)', 'Oeste Catarinense', 'Não', '', '', '-27,1004', '-52,6152'],
+  ];
+  let fora = false, pedidos = [];
+  const ctx = await navegador.newContext();
+  await ctx.route('**/firebase-config.js', r => r.fulfill({ contentType: 'text/javascript', body: 'window.FIREBASE_CONFIG = { apiKey: "teste" };' }));
+  await ctx.route('**/planilha-config.js', r => r.fulfill({ contentType: 'text/javascript', body: `window.PLANILHA_CIDADES = { url: '${PONTE}', id: 'abc' };` }));
+  await ctx.route('https://www.gstatic.com/firebasejs/**', r => r.fulfill({
+    contentType: 'text/javascript', headers: { 'access-control-allow-origin': '*' }, body: FIREBASE_FALSO[r.request().url().split('/').pop()] }));
+  await ctx.route(PONTE, r => {
+    if (fora) return r.fulfill({ status: 500, headers: { 'access-control-allow-origin': '*' }, body: 'erro' });
+    const pedido = JSON.parse(r.request().postData()); pedidos.push(pedido);
+    if (pedido.token !== 'token-teste') return r.fulfill({ contentType: 'application/json', headers: { 'access-control-allow-origin': '*' }, body: JSON.stringify({ ok: false, erro: 'nao-autorizado' }) });
+    (pedido.mudancas || []).forEach(m => { const l = planilha.find(x => x[0] === m.municipio); if (l) { l[3] = m.visitei ? 'Sim' : 'Não'; l[4] = m.data; l[5] = m.obs; } });
+    r.fulfill({ contentType: 'application/json', headers: { 'access-control-allow-origin': '*' }, body: JSON.stringify({ ok: true, cidades: planilha }) });
+  });
+  const p = await ctx.newPage();
+  p.on('pageerror', e => erros.push('cidades: ' + e.message));
+  p.on('dialog', d => d.accept());
+  await p.addInitScript(() => { window.__email = 'ok@gmail.com'; });
+  await p.goto(url);
+  await p.click('text=Entrar com Google');
+  await p.waitForSelector('text=Olá, Maria');
+  await p.click('.nav >> text=Planos');
+  await p.click('.cid-entrada');
+  await p.waitForSelector('.cid-linha');
+  confere(await p.locator('.cid-linha').count() === 4 && (await p.textContent('.hero .saldo-val')).includes('50'), 'lê as cidades da planilha e calcula o % visitado');
+  confere(await p.isVisible('.cid-faixa.ok'), 'mostra que está sincronizado com a planilha');
+  confere(await p.locator('.cid-ponto').count() === 4 && await p.locator('.cid-ponto.on').count() === 2, 'mapa mostra as cidades, com as visitadas em destaque');
+
+  await p.locator('.cid-linha', { hasText: 'Lages' }).locator('.cid-check').click();
+  await p.waitForFunction(() => document.querySelector('.cid-faixa.ok') && !document.querySelector('.cid-linha small')?.textContent.includes('aguardando'));
+  await p.waitForTimeout(300);
+  confere(planilha[2][3] === 'Sim' && /\d{2}\/\d{2}\/\d{4}/.test(planilha[2][4]), 'marcar no app grava "Sim" e a data na planilha');
+
+  // Editou na planilha (por fora): o app traz na próxima sincronização.
+  planilha[3][3] = 'Sim'; planilha[3][5] = 'viagem de trabalho';
+  await p.click('[data-a=cidSincronizar]');
+  await p.waitForFunction(() => document.querySelectorAll('.cid-linha.on').length === 4);
+  confere(await p.isVisible('text=viagem de trabalho'), 'mudança feita na planilha aparece no app');
+
+  // Planilha fora do ar: guarda no aparelho e avisa.
+  fora = true;
+  await p.locator('.cid-linha', { hasText: 'Blumenau' }).locator('.cid-txt').click();
+  await p.check('dialog [name=v][value=s]', { force: true });
+  await p.fill('dialog [name=o]', 'Oktoberfest');
+  await p.click('dialog >> text=Salvar');
+  await p.waitForSelector('.cid-faixa.erro');
+  confere((await p.textContent('.cid-faixa.erro')).includes('Não está sincronizando') && (await p.textContent('.cid-faixa.erro')).includes('1 alteração'), 'sem planilha: avisa que não está sincronizando e guarda a alteração');
+  await p.click('.nav >> text=Início');
+  confere(await p.isVisible('text=Cidades visitadas não estão sincronizando'), 'o aviso aparece também na tela inicial');
+
+  // Voltou: envia o que estava guardado.
+  fora = false;
+  await p.click('.nav >> text=Planos'); await p.click('.cid-entrada');
+  await p.click('[data-a=cidSincronizar]');
+  await p.waitForSelector('.cid-faixa.ok');
+  confere(planilha[0][5] === 'Oktoberfest' && await p.evaluate(() => localStorage.getItem('apg-cidades-pend')) === '{}', 'quando a planilha volta, envia o que estava guardado');
+  await ctx.close();
+}
+
 async function modoNuvem(navegador, url, erros) {
   console.log('Modo nuvem (Firebase simulado)');
   const ctx = await navegador.newContext();
@@ -395,6 +463,7 @@ async function modoNuvem(navegador, url, erros) {
     await importacaoExtrato(navegador, url, erros);
     await modoNuvem(navegador, url, erros);
     await triagemEntreAparelhos(navegador, url, erros);
+    await cidadesPlanilha(navegador, url, erros);
     if (erros.length) throw new Error('Erros de JavaScript na página:\n' + erros.join('\n'));
     console.log('\nTudo certo ✅');
   } catch (e) {

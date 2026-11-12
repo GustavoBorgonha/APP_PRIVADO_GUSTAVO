@@ -56,6 +56,14 @@ PWA em JavaScript puro (sem framework, sem build) para finanças pessoais e plan
   ou se as regras recusarem, no aparelho (`apg-triagem`). "Voltar" pausa, e o aviso "Triagem em
   andamento" (Início/Finanças/Extratos) permite continuar ou descartar. Não versionar extratos reais; os testes usam
   extratos de mentira.
+- `cidades.js` + `planilha-config.js` — tela "Cidades de SC" (aba interna `cidades`, entrada pelo cartão em
+  Planos), espelho da planilha do Google "Cidades_SC_visitadas" (aba Cidades). A planilha é a fonte: o app
+  fala com ela por uma ponte em Apps Script (`apps-script/Codigo.gs`, publicada como App da Web; a URL vai em
+  `planilha-config.js`), mandando o ID token do Firebase (`App.idToken()`), que a ponte confere no Identity
+  Toolkit + lista de e-mails. Alterações vão para a fila `Cid.pend` (localStorage `apg-cidades-pend`) e são
+  enviadas na hora; a lista fica em cache (`apg-cidades`). Busca novidades ao abrir a tela e a cada 1 min.
+  Falhou: faixa de aviso na tela (`faixaSincronizacao`) e, se houver fila, também em Início/Planos
+  (`avisoCidadesGlobal`). O teste simula a ponte.
 - `nuvem.js` — login e sincronização. `App.sincronizar(db)` envia só o que mudou; os
   `onSnapshot` chamam `App.receber()`.
 - `firebase-config.js` — configuração pública do Firebase (não é segredo).

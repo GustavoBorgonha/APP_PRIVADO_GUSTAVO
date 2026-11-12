@@ -264,9 +264,9 @@ function render() {
   document.body.dataset.aba = ui.aba;
   if (App.modo === 'carregando') { $('#app').innerHTML = `<div class="carregando">${panda()}Carregando seus dados…</div>`; return; }
   if (App.modo === 'login') { $('#app').innerHTML = vLogin(); return; }
-  const abaMenu = ui.aba === 'categorias' ? 'financas' : ui.aba;
+  const abaMenu = ui.aba === 'categorias' ? 'financas' : ui.aba === 'cidades' ? 'planos' : ui.aba;
   document.querySelectorAll('.nav button').forEach(b => b.classList.toggle('ativo', b.dataset.v === abaMenu));
-  const views = { inicio: vInicio, financas: vFinancas, extratos: vExtratos, planos: vPlanos, dados: vDados, categorias: vCategorias };
+  const views = { inicio: vInicio, financas: vFinancas, extratos: vExtratos, planos: vPlanos, dados: vDados, categorias: vCategorias, cidades: vCidades };
   const tela = ui.aba + '|' + (ui.aba === 'planos' ? ui.plano || '' : ui.aba === 'extratos' && ui.naTriagem ? 'triagem' : ui.aba === 'extratos' ? ui.lote || '' : '');
   const trocou = tela !== render.tela; render.tela = tela;
   const app = $('#app');
@@ -274,6 +274,7 @@ function render() {
   app.innerHTML = views[ui.aba]();
   if (trocou) { void app.offsetWidth; app.classList.add('entrando'); window.scrollTo(0, 0); }
   Panda.atualizar();
+  if (ui.aba === 'cidades') { filtrarCidades(); aoMostrarCidades(); }
 }
 
 /* Humor "de fundo" do panda: fica tristinho com o saldo do mês no vermelho. */
@@ -344,6 +345,7 @@ function vInicio() {
   const atalho = (acao, valor, icone, rotulo) => `<button class="atalho" data-a="${acao}" ${valor ? `data-v="${valor}"` : ''}><span class="at-ic">${icone}</span><span>${rotulo}</span></button>`;
   return `
     ${avisoTriagem()}
+    ${avisoCidadesGlobal()}
     <div class="hero">
       <div class="hero-txt">
         <p class="ola">Olá, ${esc(App.usuario?.nome?.split(' ')[0] || 'Gustavo')}</p>
@@ -579,8 +581,10 @@ const itemTriagem = id => ui.triagem?.itens.find(i => i.id === id);
 function vPlanos() {
   if (ui.plano && plano(ui.plano)) return vPlano(plano(ui.plano));
   return `
+    ${avisoCidadesGlobal()}
     <div class="topo"><div><h1>Planos e metas</h1><p class="sub" style="margin:0">Viagens, passeios, casamento, casa, carro…</p></div>
       <button class="btn pri" data-a="novoPlano">+ Novo plano</button></div>
+    <div class="planos" style="margin-bottom:14px">${cartaoCidades()}</div>
     ${db.planos.length ? `<div class="planos">${db.planos.map(cardPlano).join('')}</div>`
       : `<div class="card"><h2>Comece um plano</h2><p class="muted">Cada plano já vem com uma lista sugerida de custos e tarefas que você pode ajustar.</p>
         <div class="tipos">${Object.entries(TIPOS).map(([k, t]) => `<button class="btn tipo" data-a="novoPlano" data-v="${k}"><span class="emoji">${t.emoji}</span>${t.nome}</button>`).join('')}</div></div>`}`;
@@ -1278,6 +1282,8 @@ ${usados.length === 1 ? 'O lançamento que usa' : `Os ${usados.length} lançamen
   },
 };
 
+Object.assign(acoes, acoesCidades);
+
 document.addEventListener('click', e => {
   const el = e.target.closest('[data-a]'); if (!el) return;
   const fn = acoes[el.dataset.a]; if (!fn) return;
@@ -1425,6 +1431,7 @@ App.receber = (colecao, docs, pronto) => {
       salvar();
     }
     enviarCatsPendentes();
+    if (qtdPendCid()) setTimeout(sincronizarCidades, 500);   // alterações de cidades que ficaram na fila
   }
   renderSeguro();
 };

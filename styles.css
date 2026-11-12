@@ -938,3 +938,44 @@ button, [role=button], a, label, select, input { touch-action: manipulation; }
 .tri-campos { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
 .seletor, .seletor-btn { min-width: 0; }
 @media (max-width: 520px) { .tri-lista { grid-template-columns: minmax(0, 1fr); } }
+
+/* ---------- Cidades de SC visitadas ---------- */
+.cid-faixa {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 0 0 16px; padding: 10px 14px;
+  border-radius: 16px; font-size: 14px; background: var(--soft); border: 1px solid var(--line);
+}
+.cid-faixa > span { flex: 1 1 220px; }
+.cid-faixa.ok { background: color-mix(in srgb, var(--green) 10%, var(--card)); border-color: color-mix(in srgb, var(--green) 30%, transparent); }
+.cid-faixa.erro { background: color-mix(in srgb, var(--red) 10%, var(--card)); border-color: color-mix(in srgb, var(--red) 35%, transparent); }
+.cid-mapa { width: 100%; height: auto; display: block; max-height: 420px; }
+.cid-ponto { fill: var(--soft-2); stroke: var(--card); stroke-width: 1; cursor: pointer; transition: r .15s, fill .15s; }
+.cid-ponto.on { fill: var(--acento); }
+.cid-ponto:hover { fill: var(--text); }
+.cid-leg { display: inline-block; width: 10px; height: 10px; border-radius: 50%; background: var(--soft-2); vertical-align: -1px; margin: 0 2px 0 8px; }
+.cid-leg.on { background: var(--acento); }
+.cid-grupo { display: grid; grid-template-columns: minmax(0, 1.2fr) 1fr auto; gap: 10px; align-items: center; margin: 9px 0; font-size: 14px; }
+.cid-grupo-nome { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cid-micro summary { cursor: pointer; font-weight: 600; margin-top: 14px; color: var(--acento); font-size: 14px; }
+#cid-busca { margin: 4px 0 10px; }
+.cid-lista { display: flex; flex-direction: column; }
+.cid-linha { display: flex; align-items: center; gap: 12px; padding: 7px 4px; border-bottom: 1px solid var(--line); }
+.cid-linha:last-child { border-bottom: 0; }
+.cid-linha[hidden] { display: none; }
+.cid-check {
+  width: 30px; height: 30px; flex-shrink: 0; border-radius: 10px; border: 2px solid var(--line-forte); background: var(--card);
+  color: #fff; font-weight: 700; cursor: pointer; transition: background .15s, border-color .15s, transform .2s var(--mola);
+}
+.cid-check:active { transform: scale(.85); }
+.cid-linha.on .cid-check { background: var(--acento); border-color: var(--acento); }
+.cid-txt { flex: 1; min-width: 0; display: flex; flex-direction: column; cursor: pointer; padding: 2px 4px; border-radius: 10px; }
+.cid-txt:hover { background: var(--soft); }
+.cid-txt strong { font-weight: 500; }
+.cid-txt small { color: var(--muted); font-size: 12.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cid-entrada .barra { margin-top: 2px; }
+a.btn { text-decoration: none; color: var(--text); display: inline-flex; align-items: center; }
+.cid-ponto { fill: var(--muted); fill-opacity: .35; }
+.cid-ponto.on { fill-opacity: 1; }
+.cid-leg { background: var(--muted); opacity: .45; }
+.cid-leg.on { opacity: 1; }
+/* Lista longa (295 cidades): rola dentro do cartão em vez de esticar a página */
+.cid-lista { max-height: 560px; overflow-y: auto; overscroll-behavior: contain; margin: 0 -4px; padding: 0 4px; }

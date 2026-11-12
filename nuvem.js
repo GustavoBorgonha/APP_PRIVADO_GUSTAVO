@@ -66,8 +66,10 @@ async function iniciar() {
 
   A.onAuthStateChanged(auth, u => {
     escutas.forEach(parar => parar()); escutas = [];
-    if (!u) { App.usuario = null; App.mostrarLogin(); return; }
+    if (!u) { App.usuario = null; App.idToken = null; App.mostrarLogin(); return; }
     App.usuario = { nome: u.displayName || '', email: u.email };
+    // Prova de login para a ponte da planilha de cidades (Apps Script confere com o Firebase).
+    App.idToken = () => u.getIdToken();
     App.carregando();
     const recebido = {};
     let negado = false;
