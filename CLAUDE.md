@@ -60,6 +60,11 @@ PWA em JavaScript puro (sem framework, sem build) para finanças pessoais e plan
   estabelecimento, `chaveMov`) e confirma de uma vez; estornos são ignorados; valor já lançado, fatura e dados
   faltando ficam para revisar. Não mexe no que foi editado à mão (`catManual`/`descManual`). Não versionar extratos reais; os testes usam
   extratos de mentira.
+- `revisao.js` — duas telas internas abertas por Finanças: **Revisar categoria** (`vRevisao`, aba `revisao`):
+  período + categoria → cartões estilo triagem para trocar categoria/descrição e confirmar ou pular; sugere
+  pelo histórico sem contar a própria categoria (`memoriaHistorico(filtro)`), com "Aplicar sugestões".
+  **Conta corrente** (`vContas`, aba `contas`): cada conta = banco + meio + titular (`chaveConta`), lista
+  cada movimento (inclusive transferências) com o saldo depois dele; saldo começa em zero no 1º lançamento.
 - `cidades.js` + `planilha-config.js` — tela "Cidades de SC" (aba interna `cidades`, entrada pelo cartão em
   Planos), espelho da planilha do Google "Cidades_SC_visitadas" (aba Cidades). A planilha é a fonte: o app
   fala com ela por uma ponte em Apps Script (`apps-script/Codigo.gs`, publicada como App da Web; a URL vai em

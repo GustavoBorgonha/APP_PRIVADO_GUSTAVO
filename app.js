@@ -264,9 +264,9 @@ function render() {
   document.body.dataset.aba = ui.aba;
   if (App.modo === 'carregando') { $('#app').innerHTML = `<div class="carregando">${panda()}Carregando seus dados…</div>`; return; }
   if (App.modo === 'login') { $('#app').innerHTML = vLogin(); return; }
-  const abaMenu = ui.aba === 'categorias' ? 'financas' : ui.aba === 'cidades' ? 'planos' : ui.aba;
+  const abaMenu = ['categorias', 'revisao', 'contas'].includes(ui.aba) ? 'financas' : ui.aba === 'cidades' ? 'planos' : ui.aba;
   document.querySelectorAll('.nav button').forEach(b => b.classList.toggle('ativo', b.dataset.v === abaMenu));
-  const views = { inicio: vInicio, financas: vFinancas, extratos: vExtratos, planos: vPlanos, dados: vDados, categorias: vCategorias, cidades: vCidades };
+  const views = { inicio: vInicio, financas: vFinancas, extratos: vExtratos, planos: vPlanos, dados: vDados, categorias: vCategorias, cidades: vCidades, revisao: vRevisao, contas: vContas };
   const tela = ui.aba + '|' + (ui.aba === 'planos' ? ui.plano || '' : ui.aba === 'extratos' && ui.naTriagem ? 'triagem' : ui.aba === 'extratos' ? ui.lote || '' : '');
   const trocou = tela !== render.tela; render.tela = tela;
   const app = $('#app');
@@ -366,7 +366,7 @@ function vInicio() {
       ${atalho('novoPlano', '', IC.alvo, 'Novo plano')}
       ${atalho('aba', 'financas', IC.extrato, 'Finanças')}
       ${atalho('aba', 'extratos', IC.importar, 'Extratos')}
-      ${atalho('exportarCSV', '', IC.baixar, 'Planilha')}
+      ${atalho('aba', 'contas', IC.extrato, 'Conta corrente')}
     </div>
 
     <div class="topo secao"><h2>Meus planos</h2><button class="link" data-a="novoPlano">+ Novo plano</button></div>
@@ -430,6 +430,8 @@ function vFinancas() {
       <button class="btn" data-a="exportarCSV">Exportar planilha</button>
       <button class="btn" data-a="importarExtrato">Importar extrato do banco</button>
       <button class="btn" data-a="importarCSV">Importar planilha</button>
+      <button class="btn" data-a="aba" data-v="contas">🏦 Conta corrente</button>
+      <button class="btn" data-a="aba" data-v="revisao">🔎 Revisar categoria</button>
       <button class="btn" data-a="aba" data-v="categorias">🏷️ Categorias</button>
     </div>
     <div class="cols-2" style="grid-template-columns:1.7fr 1fr">
@@ -499,17 +501,20 @@ function confirmarItem(i) {
 // "Chave" do estabelecimento: sem prefixos (Pix, compra…) e sem números, para casar variações do mesmo lugar.
 const chaveMov = s => semAcentoApp(s).replace(/^(pix( enviado| recebido)?|ted|doc|compra( no (debito|credito))?|pagamento( de titulo)?)[:\s-]+/, '')
   .replace(/["'*#]/g, ' ').replace(/\b[\d.\/-]+\b/g, ' ').replace(/\s+/g, ' ').trim();
-function memoriaHistorico() {
-  const porBruto = new Map(), porDesc = new Map(), porChave = new Map();
+// Início do nome do estabelecimento (2 primeiras palavras que importam): casa "Uber do Brasil" com "Uber do Brasil Tecnologia".
+const inicioMov = s => { const p = chaveMov(s).split(' ').filter(w => w.length > 2 && !['dos', 'das', 'com', 'para'].includes(w)); return p.length >= 2 ? p.slice(0, 2).join(' ') : p[0] && p[0].length >= 4 ? p[0] : ''; };
+function memoriaHistorico(filtro = () => true) {
+  const porBruto = new Map(), porDesc = new Map(), porChave = new Map(), porInicio = new Map();
   const somar = (m, chave, tipo, valor) => {
     if (!chave) return;
     const k = tipo + '|' + chave, c = m.get(k) || new Map();
     c.set(valor, (c.get(valor) || 0) + 1); m.set(k, c);
   };
   db.lancamentos.forEach(l => {
-    if (!l.categoria) return;
+    if (!l.categoria || !filtro(l)) return;
     somar(porDesc, semAcentoApp(l.desc), l.tipo, l.categoria);
     somar(porChave, chaveMov(l.desc), l.tipo, l.categoria);
+    somar(porInicio, inicioMov(l.desc), l.tipo, l.categoria);
     if (l.bruto) {
       somar(porBruto, semAcentoApp(l.bruto), l.tipo, JSON.stringify([l.desc, l.categoria]));
       somar(porChave, chaveMov(l.bruto), l.tipo, l.categoria);
@@ -522,7 +527,8 @@ function memoriaHistorico() {
     if (igual) { const [desc, categoria] = JSON.parse(igual); return { desc, categoria }; }
     // 2º: mesma descrição ou mesmo estabelecimento → categoria mais usada nele.
     const categoria = maisUsada(porDesc.get(i.tipo + '|' + semAcentoApp(i.desc)))
-      || maisUsada(porChave.get(i.tipo + '|' + chaveMov(i.desc))) || maisUsada(porChave.get(i.tipo + '|' + chaveMov(i.bruto)));
+      || maisUsada(porChave.get(i.tipo + '|' + chaveMov(i.desc))) || maisUsada(porChave.get(i.tipo + '|' + chaveMov(i.bruto)))
+      || maisUsada(porInicio.get(i.tipo + '|' + inicioMov(i.desc))) || maisUsada(porInicio.get(i.tipo + '|' + inicioMov(i.bruto)));
     return categoria ? { categoria } : null;
   };
 }
@@ -1006,7 +1012,8 @@ function vCategorias() {
       <div><button class="btn mini voltar" data-a="aba" data-v="financas">${IC.voltar} Finanças</button>
         <h1 style="margin-top:10px">Categorias</h1>
         <p class="sub" style="margin:0">Toque numa categoria para mudar o nome, o tipo ou o ícone.</p></div>
-      <button class="btn pri" data-a="novaCat">+ Nova categoria</button>
+      <div class="acoes"><button class="btn" data-a="aba" data-v="revisao">🔎 Revisar lançamentos</button>
+        <button class="btn pri" data-a="novaCat">+ Nova categoria</button></div>
     </div>
     ${App.modo === 'nuvem' && App.categoriasSemNuvem ? `<p class="tri-aviso forte" style="margin:0 0 16px">⚠️ As categorias estão salvas só neste aparelho:
       ${App.categoriasSemNuvem === 'regras' ? 'falta atualizar as regras do Firebase (veja o CONFIGURAR.md).' : 'não foi possível falar com a nuvem.'}</p>` : ''}
@@ -1371,7 +1378,7 @@ ${usados.length === 1 ? 'O lançamento que usa' : `Os ${usados.length} lançamen
   },
 };
 
-Object.assign(acoes, acoesCidades);
+Object.assign(acoes, acoesCidades, acoesRevisao, acoesContas);
 
 document.addEventListener('click', e => {
   const el = e.target.closest('[data-a]'); if (!el) return;
@@ -1402,6 +1409,12 @@ document.addEventListener('change', e => {
     const t = p.tarefas.find(t => t.id === el.dataset.i); t.feito = el.checked;
     if (t.feito) reagir('feliz', 'Uma a menos! ✅', 'Tarefa feita! Arrasou 💪');
   }
+  else if (c === 'rev') {
+    // Revisão por categoria: guarda a escolha; só vale no lançamento ao "Confirmar".
+    const id = el.dataset.i; if (!ui.revisao) return;
+    ui.revisao.edit[id] = { ...(ui.revisao.edit[id] || {}), [el.dataset.f]: el.value };
+    return;
+  }
   else if (c === 'tri') {
     // Edição na triagem: só guarda o valor; nada vai para as finanças antes do "Confirmar".
     const i = itemTriagem(el.dataset.i), f = el.dataset.f; if (!i) return;
@@ -1424,6 +1437,7 @@ document.addEventListener('submit', e => {
   e.preventDefault();
   const d = Object.fromEntries(new FormData(f));
   if (tipo === 'modal') { if (aoSalvarModal?.(d) !== false) fecharModal(); else return; }
+  else if (tipo === 'revisaoInicio') { if (!iniciarRevisao(d)) return; }
   else {
     const p = plano(f.dataset.p);
     if (tipo === 'addItem') p.itens.push({ id: uid(), desc: d.desc.trim(), previsto: parseValor(d.previsto), pago: 0 });

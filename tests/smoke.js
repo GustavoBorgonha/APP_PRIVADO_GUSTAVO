@@ -448,6 +448,59 @@ async function cidadesPlanilha(navegador, url, erros) {
   await ctx.close();
 }
 
+// Revisão por categoria e conta corrente (modo local, com lançamentos prontos).
+async function revisaoEContas(navegador, url, erros) {
+  console.log('Revisão por categoria e conta corrente');
+  const ctx = await navegador.newContext();
+  await ctx.route('**/firebase-config.js', r => r.fulfill({ contentType: 'text/javascript', body: 'window.FIREBASE_CONFIG = null;' }));
+  const conta = { banco: 'Inter', meio: 'debito', titular: 'Gustavo' };
+  await ctx.addInitScript(c => {
+    if (localStorage.getItem('apg-dados-v1')) return;
+    const L = (id, tipo, desc, categoria, valor, data, extra = c) => ({ id, tipo, desc, categoria, valor, data, ...extra });
+    localStorage.setItem('apg-dados-v1', JSON.stringify({ versao: 1, planos: [], categorias: [], lancamentos: [
+      L('h1', 'despesa', 'Pix: Uber do Brasil', 'Transporte', 25, '2026-01-05'),
+      L('a', 'receita', 'Salário', 'Salário', 3000, '2026-03-05'),
+      L('b', 'despesa', 'Pix: Uber do Brasil', 'Outros', 30, '2026-03-06'),
+      L('c', 'despesa', 'Loja Qualquer', 'Outros', 100, '2026-03-07'),
+      L('d', 'despesa', 'Uber do Brasil Tecnologia', 'Outros', 15, '2026-04-02'),
+      L('e', 'despesa', 'Antigo', 'Outros', 5, '2025-01-01'),
+    ] }));
+  }, conta);
+  const p = await ctx.newPage();
+  p.on('pageerror', e => erros.push('revisao: ' + e.message));
+  p.on('dialog', d => d.accept());
+  await p.goto(url);
+  const salvos = () => p.evaluate(() => JSON.parse(localStorage.getItem('apg-dados-v1')).lancamentos);
+
+  await p.click('.nav >> text=Finanças');
+  await p.click('text=🔎 Revisar categoria');
+  await p.fill('form[data-f=revisaoInicio] [name=de]', '2026-01-01');
+  await p.fill('form[data-f=revisaoInicio] [name=ate]', '2026-12-31');
+  await escolher(p, '#rev-cat', 'Outros');
+  await p.click('text=Começar revisão');
+  confere(await p.locator('.rev').count() === 3, 'revisão traz só a categoria e o período escolhidos');
+  confere(await p.locator('.rev-sug').count() === 2, 'sugere pelo histórico (Uber → Transporte), sem sugerir a própria categoria');
+  await p.click('[data-a=revAplicarSug]');
+  let l = await salvos();
+  confere(l.find(x => x.id === 'b').categoria === 'Transporte' && l.find(x => x.id === 'd').categoria === 'Transporte', 'aplicar sugestões muda as categorias de uma vez');
+  await escolher(p, '.rev [data-f=categoria]', 'Compras');
+  await p.click('.rev [data-a=revConfirmar]');
+  l = await salvos();
+  confere(l.find(x => x.id === 'c').categoria === 'Compras' && l.find(x => x.id === 'e').categoria === 'Outros', 'confirmar aplica a categoria escolhida e não mexe fora do período');
+  confere(await p.isVisible('text=Revisão concluída!'), 'mostra quando a revisão termina');
+
+  // Conta corrente: saldo depois de cada movimento.
+  await p.click('.nav >> text=Finanças');
+  await p.click('text=🏦 Conta corrente');
+  await p.click('[data-a=contaTudo]');
+  confere((await p.textContent('.hero .saldo-val')).replace(/\s/g, ' ').includes('2.825,00'), 'conta corrente: saldo atual = entradas − saídas da conta');
+  confere(await p.locator('.cc-saldo').count() === 6, 'mostra cada movimentação com o saldo depois dela');
+  await p.click('[data-a=contaTudo]');
+  await p.evaluate(() => { ui.mes = '2026-03'; render(); });
+  confere((await p.textContent('.hero .chips')).replace(/\s/g, ' ').includes('Saldo anterior R$ -30,00') || (await p.textContent('.hero .chips')).replace(/\s/g, ' ').includes('-R$ 30,00'), 'por mês: mostra o saldo anterior');
+  await ctx.close();
+}
+
 async function modoNuvem(navegador, url, erros) {
   console.log('Modo nuvem (Firebase simulado)');
   const ctx = await navegador.newContext();
@@ -498,6 +551,7 @@ async function modoNuvem(navegador, url, erros) {
   try {
     await modoLocal(navegador, url, erros);
     await importacaoExtrato(navegador, url, erros);
+    await revisaoEContas(navegador, url, erros);
     await modoNuvem(navegador, url, erros);
     await triagemEntreAparelhos(navegador, url, erros);
     await cidadesPlanilha(navegador, url, erros);
