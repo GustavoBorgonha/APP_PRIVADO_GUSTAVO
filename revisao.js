@@ -86,7 +86,9 @@ function vRevisao() {
       <div>${volta}<h1 style="margin-top:10px">Revisar categoria</h1>
         <p class="sub" style="margin:0"><span class="selo">${iconeCat(r.categoria, 'despesa')} ${esc(r.categoria)}</span> ${periodo}</p></div>
       <div class="acoes">${comSug ? `<button class="btn pri" data-a="revAplicarSug">⚡ Aplicar sugestões (${comSug})</button>` : ''}
-        <button class="btn" data-a="revNova">Trocar filtro</button></div>
+        ${pend.length > 1 ? `<button class="btn" data-a="revPularTodos">Pular todos (${pend.length})</button>` : ''}
+        <button class="btn" data-a="revNova">Trocar filtro</button>
+        <button class="btn" data-a="revEncerrar">Encerrar revisão</button></div>
     </div>
     <div class="card tri-progresso">
       <div class="linha" style="margin:0 0 8px"><strong>${feitos} de ${lancs.length} revisados</strong>
@@ -116,6 +118,18 @@ const acoesRevisao = {
   revPular: v => { ui.revisao.estado[v] = 'pulado'; },
   revMais: () => { ui.revisao.mostrar += 10; },
   revNova: () => { ui.revisao = null; },
+  // Pular todos: os que faltam ficam como estão (nada muda neles).
+  revPularTodos: () => {
+    const r = ui.revisao, ids = r.ids.filter(id => !r.estado[id]);
+    if (!confirm(`Pular ${ids.length === 1 ? 'o lançamento que falta' : `os ${ids.length} lançamentos que faltam`}?\nEles continuam com a categoria de hoje.`)) return;
+    ids.forEach(id => { r.estado[id] = 'pulado'; });
+  },
+  // Encerrar: sai da revisão; o que já foi confirmado fica salvo, o resto não muda.
+  revEncerrar: () => {
+    const r = ui.revisao, falta = r ? r.ids.filter(id => !r.estado[id]).length : 0;
+    if (falta && !confirm(`Encerrar a revisão?\n${falta === 1 ? '1 lançamento não revisado continua' : `${falta} lançamentos não revisados continuam`} como está. O que você já confirmou fica salvo.`)) return;
+    ui.revisao = null; ui.aba = 'financas';
+  },
   revAplicarSug: () => {
     const r = ui.revisao, ids = r.ids.filter(id => !r.estado[id] && r.sug[id] && !(r.edit[id] && r.edit[id].categoria));
     if (!confirm(`Aplicar a sugestão do histórico em ${ids.length === 1 ? '1 lançamento' : `${ids.length} lançamentos`}?\nOs outros continuam para você revisar.`)) return;

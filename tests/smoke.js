@@ -533,6 +533,20 @@ async function revisaoEContas(navegador, url, erros) {
   l = await salvos();
   confere(l.find(x => x.id === 'c').categoria === 'Compras' && l.find(x => x.id === 'e').categoria === 'Outros', 'confirmar aplica a categoria escolhida e não mexe fora do período');
   confere(await p.isVisible('text=Revisão concluída!'), 'mostra quando a revisão termina');
+  // Pular todos e encerrar.
+  await p.click('[data-a=revNova]');
+  await p.fill('form[data-f=revisaoInicio] [name=de]', '');
+  await escolher(p, '#rev-cat', 'Transporte');
+  await p.click('text=Começar revisão');
+  const antesPular = JSON.stringify(await salvos());
+  await p.click('[data-a=revPularTodos]');
+  confere(await p.isVisible('text=Revisão concluída!') && JSON.stringify(await salvos()) === antesPular, 'pular todos termina a revisão sem mudar nada');
+  await p.click('[data-a=revNova]');
+  await p.fill('form[data-f=revisaoInicio] [name=de]', '');
+  await escolher(p, '#rev-cat', 'Compras');
+  await p.click('text=Começar revisão');
+  await p.click('[data-a=revEncerrar]');
+  confere(await p.isVisible('h1:has-text("Finanças")'), 'encerrar revisão volta para Finanças');
 
   // Conta corrente: saldo depois de cada movimento.
   await p.click('.nav >> text=Finanças');
