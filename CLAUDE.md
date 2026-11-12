@@ -54,7 +54,11 @@ PWA em JavaScript puro (sem framework, sem build) para finanças pessoais e plan
   A triagem fica salva para continuar de onde parou: com login, no Firestore (`triagens/atual`, uma
   triagem por vez, compartilhada entre aparelhos — `App.salvarTriagem`/`App.receberTriagem`); sem login
   ou se as regras recusarem, no aparelho (`apg-triagem`). "Voltar" pausa, e o aviso "Triagem em
-  andamento" (Início/Finanças/Extratos) permite continuar ou descartar. Não versionar extratos reais; os testes usam
+  andamento" (Início/Finanças/Extratos) permite continuar ou descartar.
+  "⚡ Triagem automática" (`modalTriagemAuto`/`planoTriagemAuto`): refaz descrição/categoria pelo histórico
+  (`memoriaHistorico`: mesmo texto do banco → `bruto` salvo no lançamento; depois descrição e "chave" do
+  estabelecimento, `chaveMov`) e confirma de uma vez; estornos são ignorados; valor já lançado, fatura e dados
+  faltando ficam para revisar. Não mexe no que foi editado à mão (`catManual`/`descManual`). Não versionar extratos reais; os testes usam
   extratos de mentira.
 - `cidades.js` + `planilha-config.js` — tela "Cidades de SC" (aba interna `cidades`, entrada pelo cartão em
   Planos), espelho da planilha do Google "Cidades_SC_visitadas" (aba Cidades). A planilha é a fonte: o app

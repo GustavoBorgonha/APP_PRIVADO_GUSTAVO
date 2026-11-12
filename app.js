@@ -482,6 +482,97 @@ function cartaoTriagem(i) {
   </div>`;
 }
 
+// Grava um item da triagem como lançamento (sem perguntas: quem chama já validou).
+function confirmarItem(i) {
+  const t = ui.triagem, desc = String(i.desc || '').trim(), valor = Math.abs(parseValor(i.valor));
+  const l = { id: uid(), tipo: i.tipo, desc, categoria: String(i.categoria || '').trim() || 'Outros', valor, data: i.data, fixo: !!i.fixo,
+    origem: i.origem, banco: t.banco, meio: t.meio, titular: t.titular || '', bruto: i.bruto || '',
+    lote: t.lote, loteArquivo: t.arquivo, loteEm: t.em };
+  db.lancamentos.push(l);
+  Object.assign(i, { estado: 'ok', lancId: l.id, desc, valor, categoria: l.categoria });
+}
+
+/* ---------- triagem automática ----------
+   Redistribui descrição e categoria com base no histórico (o que você já lançou) e confirma de uma vez
+   o que é seguro. Estornos que se anulam são ignorados; o que pede atenção (valor já lançado, pagamento
+   de fatura, dados faltando) fica pendente para você revisar. */
+// "Chave" do estabelecimento: sem prefixos (Pix, compra…) e sem números, para casar variações do mesmo lugar.
+const chaveMov = s => semAcentoApp(s).replace(/^(pix( enviado| recebido)?|ted|doc|compra( no (debito|credito))?|pagamento( de titulo)?)[:\s-]+/, '')
+  .replace(/["'*#]/g, ' ').replace(/\b[\d.\/-]+\b/g, ' ').replace(/\s+/g, ' ').trim();
+function memoriaHistorico() {
+  const porBruto = new Map(), porDesc = new Map(), porChave = new Map();
+  const somar = (m, chave, tipo, valor) => {
+    if (!chave) return;
+    const k = tipo + '|' + chave, c = m.get(k) || new Map();
+    c.set(valor, (c.get(valor) || 0) + 1); m.set(k, c);
+  };
+  db.lancamentos.forEach(l => {
+    if (!l.categoria) return;
+    somar(porDesc, semAcentoApp(l.desc), l.tipo, l.categoria);
+    somar(porChave, chaveMov(l.desc), l.tipo, l.categoria);
+    if (l.bruto) {
+      somar(porBruto, semAcentoApp(l.bruto), l.tipo, JSON.stringify([l.desc, l.categoria]));
+      somar(porChave, chaveMov(l.bruto), l.tipo, l.categoria);
+    }
+  });
+  const maisUsada = c => c ? [...c].sort((a, b) => b[1] - a[1])[0][0] : null;
+  return i => {
+    // 1º: o mesmo texto do banco já foi lançado antes → mesma descrição e categoria.
+    const igual = maisUsada(porBruto.get(i.tipo + '|' + semAcentoApp(i.bruto)));
+    if (igual) { const [desc, categoria] = JSON.parse(igual); return { desc, categoria }; }
+    // 2º: mesma descrição ou mesmo estabelecimento → categoria mais usada nele.
+    const categoria = maisUsada(porDesc.get(i.tipo + '|' + semAcentoApp(i.desc)))
+      || maisUsada(porChave.get(i.tipo + '|' + chaveMov(i.desc))) || maisUsada(porChave.get(i.tipo + '|' + chaveMov(i.bruto)));
+    return categoria ? { categoria } : null;
+  };
+}
+function planoTriagemAuto() {
+  const sugerir = memoriaHistorico();
+  return ui.triagem.itens.filter(i => i.estado === 'pendente').map(i => {
+    const s = sugerir(i) || {}, novo = {};
+    if (s.categoria && !i.catManual && s.categoria !== i.categoria) novo.categoria = s.categoria;
+    if (s.desc && !i.descManual && s.desc !== i.desc) novo.desc = s.desc;
+    const avisos = (i.avisos || []).join(' '), teste = { ...i, ...novo };
+    let acao = 'confirmar', motivo = '';
+    if (/se anulam/.test(avisos)) { acao = 'ignorar'; motivo = 'Estorno (envio e devolução se anulam)'; }
+    else if (/fatura/i.test(avisos)) { acao = 'revisar'; motivo = 'Pagamento de fatura'; }
+    else if (i.forcar || parecido(teste)) { acao = 'revisar'; motivo = 'Valor já lançado'; }
+    else if (!String(teste.desc || '').trim() || !Math.abs(parseValor(teste.valor)) || !/^\d{4}-\d{2}-\d{2}$/.test(teste.data || '')) { acao = 'revisar'; motivo = 'Faltam dados'; }
+    return { i, novo, acao, motivo };
+  });
+}
+function modalTriagemAuto() {
+  const plano = planoTriagemAuto();
+  if (!plano.length) return alert('Não há lançamentos pendentes nesta triagem.');
+  const conf = plano.filter(x => x.acao === 'confirmar'), ign = plano.filter(x => x.acao === 'ignorar'), rev = plano.filter(x => x.acao === 'revisar');
+  const mudaram = plano.filter(x => x.novo.categoria || x.novo.desc).length;
+  const porCat = {};
+  conf.forEach(x => { const c = x.novo.categoria || x.i.categoria || 'Outros'; porCat[c] = (porCat[c] || 0) + 1; });
+  const motivos = {};
+  rev.forEach(x => { motivos[x.motivo] = (motivos[x.motivo] || 0) + 1; });
+  abrirModal(`
+    <h2>⚡ Triagem automática</h2>
+    <p class="muted" style="margin-top:-6px">Com base no seu histórico de lançamentos, o app vai:</p>
+    <form class="form" data-f="modal">
+      <div class="full auto-resumo">
+        <div class="auto-linha ok"><b>${conf.length}</b><span>${conf.length === 1 ? 'lançamento confirmado' : 'lançamentos confirmados'}${mudaram ? ` · ${mudaram} com categoria ou descrição refeita pelo histórico` : ''}</span></div>
+        ${ign.length ? `<div class="auto-linha"><b>${ign.length}</b><span>${ign.length === 1 ? 'ignorado' : 'ignorados'}: estornos que se anulam</span></div>` : ''}
+        ${rev.length ? `<div class="auto-linha revisar"><b>${rev.length}</b><span>para você revisar: ${Object.entries(motivos).map(([m, n]) => `${esc(m.toLowerCase())} (${n})`).join(', ')}</span></div>` : ''}
+      </div>
+      ${conf.length ? `<div class="full"><span class="rotulo">Como vai ficar</span>
+        <div class="chips">${Object.entries(porCat).sort((a, b) => b[1] - a[1]).map(([c, n]) => `<span class="chip">${iconeCat(c, 'despesa')} ${esc(c)} <b>${n}</b></span>`).join('')}</div></div>` : ''}
+      <p class="muted small full" style="margin:0">Dá para desfazer depois: cada um pode ser desfeito em "Já revisados", ou a importação inteira pode ser cancelada.</p>
+      <div class="modal-acoes full"><button type="button" class="btn" data-a="fecharModal">Cancelar</button>
+        <button class="btn pri" ${conf.length || ign.length ? '' : 'disabled'}>Fazer triagem automática</button></div>
+    </form>`, () => {
+    const atual = planoTriagemAuto();   // recalcula na hora de aplicar
+    atual.forEach(x => Object.assign(x.i, x.novo));
+    atual.forEach(x => { if (x.acao === 'confirmar') confirmarItem(x.i); else if (x.acao === 'ignorar') x.i.estado = 'ignorado'; });
+    const n = atual.filter(x => x.acao === 'confirmar').length, r = atual.filter(x => x.acao === 'revisar').length;
+    reagir('feliz', r ? `${n} lançados! Faltam ${r} para revisar 👀` : 'Triagem automática feita! ⚡🐼');
+  });
+}
+
 // Procura nas finanças um lançamento que pareça ser o mesmo movimento:
 // mesmo identificador do banco, ou mesma data + mesmo valor + mesmo tipo.
 function parecido(i) {
@@ -503,7 +594,8 @@ function vTriagem() {
         <h1 style="margin-top:10px">Triagem do extrato</h1>
         <p class="sub" style="margin:0"><span class="selo">${esc(t.banco)} · ${t.meio === 'credito' ? 'cartão de crédito' : 'conta (débito)'}${t.titular ? ' · ' + esc(t.titular) : ''}</span>
           ${esc(t.arquivo)} · nada entra nas suas finanças sem você confirmar.</p></div>
-      <button class="btn perigo" data-a="cancelarImportacao">Cancelar importação</button>
+      <div class="acoes">${pend.length ? '<button class="btn pri" data-a="triAuto">⚡ Triagem automática</button>' : ''}
+        <button class="btn perigo" data-a="cancelarImportacao">Cancelar importação</button></div>
     </div>
     <div class="card tri-progresso">
       <div class="linha" style="margin:0 0 8px"><strong>${feitos} de ${total} revisados</strong>
@@ -1159,13 +1251,10 @@ const acoes = {
     // Validação: se este valor já está lançado (mesma data, valor e tipo), só entra com confirmação explícita.
     const igual = parecido(i);
     if (igual && !confirm(`Atenção: este valor parece já estar lançado.\n\nJá existe: ${descreveLanc(igual)}\n\nLançar mesmo assim? (vai ficar em dobro se for o mesmo movimento)`)) return;
-    const l = { id: uid(), tipo: i.tipo, desc, categoria: String(i.categoria || '').trim() || 'Outros', valor, data: i.data, fixo: !!i.fixo,
-      origem: i.origem, banco: ui.triagem.banco, meio: ui.triagem.meio, titular: ui.triagem.titular || '',
-      lote: ui.triagem.lote, loteArquivo: ui.triagem.arquivo, loteEm: ui.triagem.em };
-    db.lancamentos.push(l);
-    Object.assign(i, { estado: 'ok', lancId: l.id, desc, valor, categoria: l.categoria });
+    confirmarItem(i);
     if (!ui.triagem.itens.some(x => x.estado === 'pendente')) reagir('feliz', 'Extrato em dia! 🎉', 'Triagem concluída! ✨');
   },
+  triAuto: () => modalTriagemAuto(),
   cancelarImportacao: () => {
     const t = ui.triagem; if (!t) return;
     const n = db.lancamentos.filter(l => l.lote === t.lote).length;
@@ -1317,6 +1406,8 @@ document.addEventListener('change', e => {
     // Edição na triagem: só guarda o valor; nada vai para as finanças antes do "Confirmar".
     const i = itemTriagem(el.dataset.i), f = el.dataset.f; if (!i) return;
     i[f] = f === 'fixo' ? el.checked : f === 'valor' ? Math.abs(parseValor(el.value)) : el.value;
+    if (f === 'categoria') i.catManual = true;   // a triagem automática não mexe no que você escolheu
+    if (f === 'desc') i.descManual = true;
     guardarTriagem();
     if (f === 'tipo' || f === 'categoria' || f === 'valor') render();
     return;

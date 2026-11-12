@@ -274,6 +274,25 @@ async function importacaoExtrato(navegador, url, erros) {
   await p.waitForSelector('text=Tudo revisado!');
   l = await salvos();
   confere(l.length === 4 && l.some(x => x.valor === 2500 && x.tipo === 'receita') && l.some(x => x.valor === 16.65 && x.tipo === 'despesa'), 'tudo revisado: lançamentos gravados com os valores certos');
+  await p.click('text=Concluir');
+
+  // Triagem automática: usa o histórico ("Pix: Armazem do ze" já era Mercado), ignora estorno e deixa repetido para revisar.
+  await p.evaluate(() => {
+    const d = JSON.parse(localStorage.getItem('apg-dados-v1'));
+    d.lancamentos.push({ id: 'hist1', tipo: 'despesa', desc: 'Pix: Armazem do ze', categoria: 'Mercado', valor: 12, data: '2026-02-01' });
+    d.lancamentos.push({ id: 'hist2', tipo: 'despesa', desc: 'Academia', categoria: 'Saúde', valor: 99, data: '2026-04-10' });
+    localStorage.setItem('apg-dados-v1', JSON.stringify(d));
+  });
+  await p.reload();
+  await importar('auto.csv', 'Data;Histórico;Valor\n10/04/2026;ARMAZEM DO ZE;-50,00\n11/04/2026;PIX ENVIADO UBER;-20,00\n11/04/2026;PIX ENVIADO DEVOLVIDO UBER;20,00\n10/04/2026;ACADEMIA;-99,00\n12/04/2026;LOJA NOVA;-30,00', 'Inter');
+  await p.click('[data-a=triAuto]');
+  const resumo = await p.textContent('dialog .auto-resumo');
+  confere(/2\s*lançamentos confirmados/.test(resumo) && /2\s*ignorados/.test(resumo) && /1\s*para você revisar/.test(resumo), 'triagem automática mostra o resumo antes de aplicar');
+  await p.click('dialog >> text=Fazer triagem automática');
+  l = await salvos();
+  const armazem = l.find(x => x.valor === 50);
+  confere(armazem && armazem.categoria === 'Mercado' && l.some(x => x.valor === 30 && x.categoria === 'Outros'), 'triagem automática redistribui a categoria pelo histórico e confirma');
+  confere(!l.some(x => x.valor === 20) && await p.locator('.tri').count() === 1 && await p.isVisible('.tri:has-text("ACADEMIA")'), 'estorno é ignorado e o valor já lançado fica para revisar');
   await ctx.close();
 }
 

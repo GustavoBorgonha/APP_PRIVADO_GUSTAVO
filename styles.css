@@ -1016,3 +1016,10 @@ a.btn { text-decoration: none; color: var(--text); display: inline-flex; align-i
 
 /* Tema escuro: escurece o mapa do OpenStreetMap (as cidades marcadas não são afetadas) */
 .cid-mapa-base.escuro .leaflet-tile-pane { filter: invert(1) hue-rotate(180deg) brightness(.92) contrast(.88) saturate(.5); }
+
+/* Triagem automática: resumo */
+.auto-resumo { display: flex; flex-direction: column; gap: 8px; }
+.auto-linha { display: flex; align-items: center; gap: 12px; padding: 10px 14px; border-radius: 16px; background: var(--soft); }
+.auto-linha b { font-size: 22px; min-width: 34px; text-align: center; }
+.auto-linha.ok { background: color-mix(in srgb, var(--green) 12%, var(--card)); }
+.auto-linha.revisar { background: color-mix(in srgb, #f0b429 14%, var(--card)); }
