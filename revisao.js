@@ -10,6 +10,14 @@
    (ou a descrição) e confirmar, ou pular. O app sugere a categoria pelo histórico
    (sem contar a própria categoria revisada, para não sugerir "Outros" de novo). */
 const lancPorId = id => db.lancamentos.find(l => l.id === id);
+// Último filtro usado (período e categoria): fica guardado nesta sessão do navegador e volta ao "Trocar filtro".
+const CHAVE_REV = 'apg-rev-filtro';
+function ultimoFiltroRev() {
+  try { return JSON.parse(sessionStorage.getItem(CHAVE_REV)) || null; } catch (e) { return null; }
+}
+function guardarFiltroRev(f) {
+  try { sessionStorage.setItem(CHAVE_REV, JSON.stringify(f)); } catch (e) { /* sem armazenamento */ }
+}
 const inicioDoMes = m => m + '-01';
 
 function iniciarRevisao(d) {
@@ -24,6 +32,7 @@ function iniciarRevisao(d) {
     const l = lancPorId(id), s = sugerir({ ...l, bruto: l.bruto || '' });
     if (s && s.categoria && s.categoria !== categoria) sug[id] = s.categoria;
   });
+  guardarFiltroRev({ de: d.de || '', ate: d.ate || '', categoria });
   ui.revisao = { de: d.de || '', ate: d.ate || '', categoria, ids, estado: {}, edit: {}, sug, mostrar: 10 };
   return true;
 }
@@ -56,14 +65,15 @@ function vRevisao() {
   const volta = `<button class="btn mini voltar" data-a="aba" data-v="financas">${IC.voltar} Finanças</button>`;
   if (!r) {
     const hojeISO = hoje(), tresMeses = inicioDoMes(mesDesloc(mesAtual(), -2));
+    const ult = ultimoFiltroRev() || { de: tresMeses, ate: hojeISO, categoria: 'Outros' };
     return `
       <div class="topo"><div>${volta}<h1 style="margin-top:10px">Revisar categoria</h1>
         <p class="sub" style="margin:0">Escolha o período e a categoria. Você revisa os lançamentos um a um, como na triagem.</p></div></div>
       <div class="card" style="max-width:640px">
         <form class="form" data-f="revisaoInicio">
-          <label>De<input type="date" name="de" value="${tresMeses}"></label>
-          <label>Até<input type="date" name="ate" value="${hojeISO}"></label>
-          <label class="full">Categoria${seletorCat('name="categoria" id="rev-cat"', 'periodo', 'Outros', 'Escolha a categoria')}</label>
+          <label>De<input type="date" name="de" value="${esc(ult.de)}"></label>
+          <label>Até<input type="date" name="ate" value="${esc(ult.ate)}"></label>
+          <label class="full">Categoria${seletorCat('name="categoria" id="rev-cat"', 'periodo', ult.categoria || 'Outros', 'Escolha a categoria')}</label>
           <div class="acoes full rev-atalhos">
             <span class="muted small">Período rápido:</span>
             <button type="button" class="btn mini" data-a="revPeriodo" data-v="mes">Este mês</button>

@@ -533,8 +533,10 @@ async function revisaoEContas(navegador, url, erros) {
   l = await salvos();
   confere(l.find(x => x.id === 'c').categoria === 'Compras' && l.find(x => x.id === 'e').categoria === 'Outros', 'confirmar aplica a categoria escolhida e não mexe fora do período');
   confere(await p.isVisible('text=Revisão concluída!'), 'mostra quando a revisão termina');
-  // Pular todos e encerrar.
+  // Trocar filtro volta com o último período e categoria usados.
   await p.click('[data-a=revNova]');
+  confere(await p.inputValue('form[data-f=revisaoInicio] [name=de]') === '2026-01-01' && await p.inputValue('#rev-cat') === 'Outros', 'trocar filtro traz a seleção anterior');
+  // Pular todos e encerrar.
   await p.fill('form[data-f=revisaoInicio] [name=de]', '');
   await escolher(p, '#rev-cat', 'Transporte');
   await p.click('text=Começar revisão');
