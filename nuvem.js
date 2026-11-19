@@ -25,8 +25,8 @@ async function iniciar() {
   // Cache local: o app continua funcionando sem internet e sincroniza depois.
   const fs = F.initializeFirestore(app, { localCache: F.persistentLocalCache({ tabManager: F.persistentMultipleTabManager() }) });
 
-  const EXTRAS = ['categorias', 'agendados'];   // coleções que podem ainda não estar nas regras do Firebase
-  const enviado = { lancamentos: new Map(), planos: new Map(), categorias: new Map(), agendados: new Map() }; // id -> JSON já sincronizado
+  const EXTRAS = ['categorias', 'agendados', 'tarefas', 'pessoas'];   // coleções que podem ainda não estar nas regras do Firebase
+  const enviado = { lancamentos: new Map(), planos: new Map(), categorias: new Map(), agendados: new Map(), tarefas: new Map(), pessoas: new Map() }; // id -> JSON já sincronizado
   let escutas = [];
 
   App.entrar = () => A.signInWithPopup(auth, new A.GoogleAuthProvider()).catch(e => {

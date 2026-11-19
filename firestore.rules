@@ -16,6 +16,8 @@ service cloud.firestore {
     match /triagens/{id}    { allow read, write: if autorizado(); }   // triagem de extrato em andamento
     match /categorias/{id}  { allow read, write: if autorizado(); }   // categorias criadas/editadas
     match /agendados/{id}   { allow read, write: if autorizado(); }   // lançamentos futuros
+    match /tarefas/{id}     { allow read, write: if autorizado(); }   // calendário de tarefas
+    match /pessoas/{id}     { allow read, write: if autorizado(); }   // quem usa o calendário (e o WhatsApp de cada um)
 
     // Ninguém altera a lista de acesso pelo app.
     match /acesso/{doc} { allow read, write: if false; }

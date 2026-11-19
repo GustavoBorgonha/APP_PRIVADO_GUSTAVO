@@ -94,6 +94,14 @@ PWA em JavaScript puro (sem framework, sem build) para finanças pessoais e plan
   `agendaId`) ou, se já veio pelo extrato (`jaLancado`: mesmo valor/tipo, ±5 dias), só marca como pago.
   Finanças mostra "📅 A pagar/A receber" do mês. Coleções extras da nuvem (`EXTRAS`: categorias, agendados)
   caem para o aparelho se as regras recusarem (`App.semNuvem`).
+- `calendario.js` — **Calendário** (aba `calendario`, botão "Agenda" na navegação): `db.tarefas` (coleção `tarefas`:
+  titulo, data, hora, para[pessoaId], vistos{pessoaId: quando}, feito, criadoPor, alterada) e `db.pessoas` (coleção `pessoas`:
+  nome, email do login, whats, chave do CallMeBot). `eu()` = pessoa pelo e-mail do login (ou `apg-eu` sem login).
+  Quem cria já conta como visto; "👀 Vi" (`calVi`) para os avisos. Aviso no Início (`avisoTarefas`).
+  `avisarTarefas()` (chamado em `salvar()`) manda as tarefas abertas + pessoas para a ponte do Apps Script
+  (`acao: 'tarefas'`; só quando muda, assinatura em `apg-avisos-env`). A ponte manda WhatsApp na hora para quem
+  não viu e, com o relógio `instalarAvisos`/`avisosDeHora`, um resumo às 8h; guarda o que já avisou nas Propriedades
+  do script (não grava no Firebase). Tarefa editada (texto/dia/hora) zera os vistos e conta como nova.
 - `cidades.js` + `planilha-config.js` — tela "Cidades de SC" (aba interna `cidades`, entrada pelo cartão em
   Planos), espelho da planilha do Google "Cidades_SC_visitadas" (aba Cidades). A planilha é a fonte: o app
   fala com ela por uma ponte em Apps Script (`apps-script/Codigo.gs`, publicada como App da Web; a URL vai em

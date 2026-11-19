@@ -1034,7 +1034,7 @@ a.btn { text-decoration: none; color: var(--text); display: inline-flex; align-i
 .btn.pri .cc-n { background: color-mix(in srgb, var(--ink-text) 22%, transparent); color: inherit; }
 
 /* Lançamentos futuros (agenda) */
-.ag-aviso { border-color: color-mix(in srgb, var(--acento) 40%, transparent); background: linear-gradient(var(--acento-suave), var(--acento-suave)), var(--card); }
+.ag-aviso, .cal-aviso { border-color: color-mix(in srgb, var(--acento) 40%, transparent); background: linear-gradient(var(--acento-suave), var(--acento-suave)), var(--card); }
 .ag-aviso .mov:hover { background: var(--card); }
 .ag-linha { cursor: default; flex-wrap: wrap; }
 .ag-linha .mov-txt { cursor: pointer; }
@@ -1076,3 +1076,30 @@ a.btn { text-decoration: none; color: var(--text); display: inline-flex; align-i
 .seletor-op:has(.seletor-n) .seletor-ok { margin-left: 0; }
 .seletor-op.sem-mov { opacity: .5; }
 .seletor-op.sem-mov .seletor-n { background: var(--soft-2); color: var(--muted); }
+
+/* ---------- calendário de tarefas ---------- */
+.cal-topo { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 10px; }
+.cal-topo strong { font-size: 17px; }
+.cal-semana, .cal-grade { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; }
+.cal-semana span { text-align: center; font-size: 12px; color: var(--muted); font-weight: 600; padding: 2px 0 4px; }
+.cal-dia { position: relative; min-height: 50px; border: 0; border-radius: 12px; background: var(--soft); color: var(--text); font: inherit; font-size: 14px; cursor: pointer; display: flex; flex-direction: column; align-items: center; justify-content: flex-start; gap: 3px; padding: 6px 0 5px; }
+.cal-dia.vazio { background: transparent; cursor: default; }
+.cal-dia:hover:not(.vazio) { outline: 2px solid var(--line-forte); }
+.cal-dia.hoje { font-weight: 800; outline: 2px solid var(--ink); }
+.cal-dia.sel { background: var(--ink); color: var(--ink-text); }
+.cal-dia i { min-width: 18px; padding: 0 5px; border-radius: 99px; background: var(--acento, #6f86b3); color: #fff; font-style: normal; font-size: 11px; font-weight: 700; line-height: 17px; }
+.cal-dia i.ok { background: var(--muted); }
+.cal-tarefa, .cal-pessoa { display: flex; align-items: flex-start; gap: 10px; padding: 10px 0; border-top: 1px solid var(--line); }
+.cal-tarefa:first-of-type, .cal-pessoa:first-of-type { border-top: 0; }
+.cal-tarefa input[type=checkbox] { width: 20px; height: 20px; margin-top: 2px; flex: none; accent-color: var(--ink); }
+.cal-txt { flex: 1; min-width: 0; cursor: pointer; display: flex; flex-direction: column; gap: 2px; }
+.cal-txt small { color: var(--muted); }
+.cal-tarefa.feita strong { text-decoration: line-through; color: var(--muted); }
+.cal-tarefa.atrasada small { color: var(--red); }
+.cal-quems { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 3px; }
+.cal-quem { font-size: 12px; padding: 1px 8px; border-radius: 99px; background: var(--soft); color: var(--muted); }
+.cal-quem.viu { color: var(--text); }
+.cal-para { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 6px; }
+.cal-ajuda { background: var(--soft); border-radius: 14px; padding: 10px 14px; }
+.cal-ajuda summary { cursor: pointer; font-weight: 600; }
+.cal-ajuda ol { margin: 8px 0; padding-left: 20px; line-height: 1.6; }

@@ -145,11 +145,11 @@ function lerArquivo(accept) {
 }
 
 /* ---------- dados ---------- */
-function vazio() { return { versao: 1, lancamentos: [], planos: [], categorias: [], agendados: [] }; }
+function vazio() { return { versao: 1, lancamentos: [], planos: [], categorias: [], agendados: [], tarefas: [], pessoas: [] }; }
 function carregar() {
   try {
     const d = JSON.parse(localStorage.getItem(CHAVE));
-    if (d && Array.isArray(d.lancamentos) && Array.isArray(d.planos)) { if (!Array.isArray(d.categorias)) d.categorias = []; if (!Array.isArray(d.agendados)) d.agendados = []; return d; }
+    if (d && Array.isArray(d.lancamentos) && Array.isArray(d.planos)) { if (!Array.isArray(d.categorias)) d.categorias = []; if (!Array.isArray(d.agendados)) d.agendados = []; if (!Array.isArray(d.tarefas)) d.tarefas = []; if (!Array.isArray(d.pessoas)) d.pessoas = []; return d; }
   } catch (e) { /* sem dados */ }
   return vazio();
 }
@@ -159,6 +159,7 @@ function salvar() {
     App.sincronizar?.(db);
     // Coleções que a nuvem ainda não aceita (regras antigas) ficam salvas neste aparelho.
     Object.keys(EXTRAS).forEach(c => { if (App.semNuvem[c]) try { localStorage.setItem(EXTRAS[c], JSON.stringify(db[c] || [])); } catch (e) { /* sem armazenamento */ } });
+    avisarTarefas();   // tarefas do calendário → ponte do WhatsApp (só se algo mudou)
     return;
   }
   if (App.modo !== 'local') return;
@@ -266,7 +267,7 @@ function render() {
   if (App.modo === 'login') { $('#app').innerHTML = vLogin(); return; }
   const abaMenu = ['categorias', 'revisao', 'contas', 'agenda'].includes(ui.aba) ? 'financas' : ui.aba === 'cidades' ? 'planos' : ui.aba;
   document.querySelectorAll('.nav button').forEach(b => b.classList.toggle('ativo', b.dataset.v === abaMenu));
-  const views = { inicio: vInicio, financas: vFinancas, extratos: vExtratos, planos: vPlanos, dados: vDados, categorias: vCategorias, cidades: vCidades, revisao: vRevisao, contas: vContas, agenda: vAgenda };
+  const views = { inicio: vInicio, financas: vFinancas, extratos: vExtratos, planos: vPlanos, dados: vDados, categorias: vCategorias, cidades: vCidades, revisao: vRevisao, contas: vContas, agenda: vAgenda, calendario: vCalendario };
   const tela = ui.aba + '|' + (ui.aba === 'planos' ? ui.plano || '' : ui.aba === 'extratos' && ui.naTriagem ? 'triagem' : ui.aba === 'extratos' ? ui.lote || '' : '');
   const trocou = tela !== render.tela; render.tela = tela;
   const app = $('#app');
@@ -348,6 +349,7 @@ function vInicio() {
     ${avisoTriagem()}
     ${avisoCidadesGlobal()}
     ${avisoAgenda()}
+    ${avisoTarefas()}
     <div class="hero">
       <div class="hero-txt">
         <p class="ola">Olá, ${esc(App.usuario?.nome?.split(' ')[0] || 'Gustavo')}</p>
@@ -1511,7 +1513,7 @@ ${usados.length === 1 ? 'O lançamento que usa' : `Os ${usados.length} lançamen
   },
 };
 
-Object.assign(acoes, acoesCidades, acoesRevisao, acoesContas, acoesAgenda);
+Object.assign(acoes, acoesCidades, acoesRevisao, acoesContas, acoesAgenda, acoesCalendario);
 
 document.addEventListener('click', e => {
   const el = e.target.closest('[data-a]'); if (!el) return;
@@ -1551,6 +1553,11 @@ document.addEventListener('change', e => {
   else if (c === 'tarefaFeita') {
     const t = p.tarefas.find(t => t.id === el.dataset.i); t.feito = el.checked;
     if (t.feito) reagir('feliz', 'Uma a menos! ✅', 'Tarefa feita! Arrasou 💪');
+  }
+  else if (c === 'calFeito') {
+    const t = (db.tarefas || []).find(x => x.id === el.dataset.i); if (!t) return;
+    const e = eu(); t.feito = el.checked; t.feitoEm = el.checked ? new Date().toISOString() : ''; t.feitoPor = el.checked && e ? e.id : '';
+    if (t.feito) reagir('feliz', 'Tarefa feita! 💪');
   }
   else if (c === 'rev') {
     // Revisão por categoria: guarda a escolha; só vale no lançamento ao "Confirmar".
@@ -1608,7 +1615,7 @@ App.carregando = () => {
 // Triagem vinda da nuvem (de qualquer aparelho).
 /* Coleções "extras" da nuvem (categorias, agendados): chegam por conta própria e, se as regras do
    Firebase ainda não as aceitarem, ficam salvas neste aparelho até a regra existir. */
-const EXTRAS = { categorias: 'apg-categorias', agendados: 'apg-agendados' };
+const EXTRAS = { categorias: 'apg-categorias', agendados: 'apg-agendados', tarefas: 'apg-tarefas', pessoas: 'apg-pessoas' };
 App.semNuvem = {}; App.extrasPendentes = {};
 App.receberExtra = (c, docs) => {
   db[c] = docs;
@@ -1622,7 +1629,7 @@ App.receberExtra = (c, docs) => {
     if (faltam.length) { db[c] = [...docs, ...faltam]; App.extrasPendentes[c] = true; }
     else try { localStorage.removeItem(EXTRAS[c]); } catch (e) { /* sem armazenamento */ }
   }
-  if (App.modo === 'nuvem') { enviarExtrasPendentes(); renderSeguro(); }
+  if (App.modo === 'nuvem') { enviarExtrasPendentes(); renderSeguro(); if (c === 'tarefas' || c === 'pessoas') avisarTarefas(); }
 };
 function enviarExtrasPendentes() {
   const cs = Object.keys(App.extrasPendentes).filter(c => App.extrasPendentes[c]);
@@ -1683,6 +1690,8 @@ App.receber = (colecao, docs, pronto) => {
       db.lancamentos = local.lancamentos; db.planos = local.planos;
       if (!(db.categorias || []).length) db.categorias = local.categorias || [];
       if (!(db.agendados || []).length) db.agendados = local.agendados || [];
+      if (!(db.tarefas || []).length) db.tarefas = local.tarefas || [];
+      if (!(db.pessoas || []).length) db.pessoas = local.pessoas || [];
       salvar();
     }
     enviarExtrasPendentes();

@@ -29,8 +29,8 @@ const FIREBASE_FALSO = {
   'firebase-firestore.js': `
     // Banco em memória. window.__seed permite começar com dados de "outro aparelho".
     const seed = window.__seed || {};
-    const store = { lancamentos: new Map(seed.lancamentos || []), planos: new Map(seed.planos || []), triagens: new Map(seed.triagens || []), categorias: new Map(seed.categorias || []), agendados: new Map(seed.agendados || []) };
-    const subs = { lancamentos: [], planos: [], triagens: [], categorias: [], agendados: [] }, docSubs = []; window.__store = store;
+    const store = { lancamentos: new Map(seed.lancamentos || []), planos: new Map(seed.planos || []), triagens: new Map(seed.triagens || []), categorias: new Map(seed.categorias || []), agendados: new Map(seed.agendados || []), tarefas: new Map(seed.tarefas || []), pessoas: new Map(seed.pessoas || []) };
+    const subs = { lancamentos: [], planos: [], triagens: [], categorias: [], agendados: [], tarefas: [], pessoas: [] }, docSubs = []; window.__store = store;
     window.__exportar = () => JSON.stringify(Object.fromEntries(Object.entries(store).map(([c, m]) => [c, [...m]])));
     export const initializeFirestore = () => ({}); export const persistentLocalCache = () => ({}); export const persistentMultipleTabManager = () => ({});
     export const collection = (f, c) => c; export const doc = (f, c, id) => ({ c, id });
@@ -46,7 +46,7 @@ const FIREBASE_FALSO = {
     export const deleteDoc = async r => { if (window.__semRegraTriagem) throw { code: 'permission-denied', message: 'negado' }; store[r.c].delete(r.id); setTimeout(emitDocs, 0); };
     export const writeBatch = () => { const ops = []; return {
       set: (r, d) => ops.push(() => store[r.c].set(r.id, d)), delete: r => ops.push(() => store[r.c].delete(r.id)),
-      commit: async () => { ops.forEach(o => o()); setTimeout(() => { emit('lancamentos'); emit('planos'); emit('categorias'); emit('agendados'); }, 0); } }; };`,
+      commit: async () => { ops.forEach(o => o()); setTimeout(() => { emit('lancamentos'); emit('planos'); emit('categorias'); emit('agendados'); emit('tarefas'); emit('pessoas'); }, 0); } }; };`,
 };
 
 // Escolhe uma categoria no seletor (botão que abre a lista com ícones).
@@ -698,6 +698,80 @@ async function modoNuvem(navegador, url, erros) {
   await ctx.close();
 }
 
+// Calendário de tarefas: pessoas, tarefa nova, "Vi", concluir e envio para a ponte do WhatsApp (simulada).
+async function calendarioTarefas(navegador, url, erros) {
+  console.log('Calendário de tarefas (ponte do WhatsApp simulada)');
+  const PONTE = 'https://script.google.com/macros/s/TESTE/exec';
+  const pedidos = [];
+  const ctx = await navegador.newContext();
+  await ctx.route('**/firebase-config.js', r => r.fulfill({ contentType: 'text/javascript', body: 'window.FIREBASE_CONFIG = { apiKey: "teste" };' }));
+  await ctx.route('**/planilha-config.js', r => r.fulfill({ contentType: 'text/javascript', body: `window.PLANILHA_CIDADES = { url: '${PONTE}', id: 'abc' };` }));
+  await ctx.route('https://www.gstatic.com/firebasejs/**', r => r.fulfill({
+    contentType: 'text/javascript', headers: { 'access-control-allow-origin': '*' }, body: FIREBASE_FALSO[r.request().url().split('/').pop()] }));
+  await ctx.route(PONTE, r => {
+    const pedido = JSON.parse(r.request().postData()); pedidos.push(pedido);
+    const corpo = pedido.acao === 'testeWhats' ? { ok: true, enviado: true } : pedido.acao === 'tarefas' ? { ok: true, enviados: 1, falhas: [] } : { ok: true, cidades: [] };
+    r.fulfill({ contentType: 'application/json', headers: { 'access-control-allow-origin': '*' }, body: JSON.stringify(corpo) });
+  });
+  const p = await ctx.newPage();
+  p.on('pageerror', e => erros.push('calendário: ' + e.message));
+  const alertas = []; p.on('dialog', d => { alertas.push(d.message()); d.accept(); });
+  await p.addInitScript(() => { window.__email = 'ok@gmail.com'; });
+  await p.goto(url);
+  await p.click('text=Entrar com Google');
+  await p.waitForSelector('text=Olá, Maria');
+  await p.click('.nav >> text=Agenda');
+  confere(await p.isVisible('text=Primeiro passo'), 'calendário pede para cadastrar as pessoas');
+
+  const novaPessoa = async (nome, whats, chave, email) => {
+    await p.click('[data-a=calPessoa] >> nth=0');
+    await p.fill('#modal [name=nome]', nome);
+    if (email !== undefined) await p.fill('#modal [name=email]', email);
+    await p.fill('#modal [name=whats]', whats); await p.fill('#modal [name=chave]', chave);
+    await p.click('#modal button.pri');
+  };
+  await novaPessoa('Maria', '55 47 99999-0000', '111');
+  await novaPessoa('João', '5547988880000', '222', 'joao@teste.com');
+  await p.waitForFunction(() => window.__store.pessoas.size === 2);
+  const ids = await p.evaluate(() => Object.fromEntries([...window.__store.pessoas.values()].map(x => [x.nome, x.id])));
+  confere(await p.evaluate(() => [...window.__store.pessoas.values()].find(x => x.nome === 'Maria').email === 'ok@gmail.com' && [...window.__store.pessoas.values()].find(x => x.nome === 'Maria').whats === '5547999990000'),
+    'pessoa guarda e-mail do login e WhatsApp só com números');
+  confere(await p.isVisible('.cal-pessoa >> text=(você)'), 'o app reconhece quem está usando pelo e-mail');
+
+  await p.click('.topo [data-a=calNova]');
+  await p.fill('#modal [name=titulo]', 'Ligar para o fotógrafo');
+  await p.fill('#modal [name=hora]', '19:30');
+  await p.click('#modal button.pri');
+  await p.waitForFunction(() => window.__store.tarefas.size === 1);
+  const t1 = await p.evaluate(() => [...window.__store.tarefas.values()][0]);
+  confere(t1.para.length === 2 && Object.keys(t1.vistos).length === 1 && t1.vistos[t1.criadoPor], 'tarefa nova vai para os dois; quem criou já conta como visto');
+  for (let i = 0; i < 40 && !pedidos.some(x => x.acao === 'tarefas' && x.tarefas.length === 1); i++) await p.waitForTimeout(100);
+  const env = pedidos.filter(x => x.acao === 'tarefas').pop();
+  confere(env && env.token === 'token-teste' && env.tarefas[0].vistos.length === 1 && env.pessoas.some(x => x.chave === '222'),
+    'tarefa vai para a ponte (que avisa no WhatsApp quem ainda não viu)');
+  confere(await p.isVisible('.cal-dia.sel i'), 'o dia da tarefa ganha a marquinha no calendário');
+
+  // Tarefa criada pelo João para a Maria: aparece "para você ver" até ela tocar em "Vi".
+  await p.evaluate(m => { db.tarefas.push({ id: 'tf-joao', titulo: 'Provar o terno', data: hoje(), hora: '', para: [m], vistos: {}, feito: false, criadoPor: 'x' }); salvar(); render(); }, ids['Maria']);
+  await p.click('.nav >> text=Início');
+  confere(await p.isVisible('.cal-aviso >> text=Provar o terno'), 'tarefa não vista aparece no Início');
+  await p.click('.cal-aviso [data-a=calVi]');
+  await p.waitForFunction(m => Object.keys(window.__store.tarefas.get('tf-joao').vistos).includes(m), ids['Maria']);
+  for (let i = 0; i < 40 && !pedidos.some(x => x.acao === 'tarefas' && x.tarefas.some(t => t.id === 'tf-joao' && t.vistos.length)); i++) await p.waitForTimeout(100);
+  confere(pedidos.some(x => x.acao === 'tarefas' && x.tarefas.some(t => t.id === 'tf-joao' && t.vistos.length)), '"Vi" marca como vista e avisa a ponte para parar de insistir');
+
+  await p.click('.nav >> text=Agenda');
+  await p.locator('.cal-tarefa:has-text("Provar o terno") input[type=checkbox]').first().check();
+  await p.waitForFunction(() => window.__store.tarefas.get('tf-joao').feito === true);
+  for (let i = 0; i < 40 && !(pedidos.filter(x => x.acao === 'tarefas').pop().tarefas.every(t => t.id !== 'tf-joao')); i++) await p.waitForTimeout(100);
+  confere(pedidos.filter(x => x.acao === 'tarefas').pop().tarefas.every(t => t.id !== 'tf-joao'), 'tarefa concluída sai da lista de avisos');
+
+  await p.locator('[data-a=calTeste]').first().click();
+  for (let i = 0; i < 30 && !alertas.some(a => a.includes('teste enviada')); i++) await p.waitForTimeout(100);
+  confere(pedidos.some(x => x.acao === 'testeWhats') && alertas.some(a => a.includes('teste enviada')), 'botão "Enviar teste" chama a ponte');
+  await ctx.close();
+}
+
 (async () => {
   await new Promise(ok => servidor.listen(0, '127.0.0.1', ok));
   const url = `http://127.0.0.1:${servidor.address().port}/`;
@@ -712,6 +786,7 @@ async function modoNuvem(navegador, url, erros) {
     await modoNuvem(navegador, url, erros);
     await triagemEntreAparelhos(navegador, url, erros);
     await cidadesPlanilha(navegador, url, erros);
+    await calendarioTarefas(navegador, url, erros);
     if (erros.length) throw new Error('Erros de JavaScript na página:\n' + erros.join('\n'));
     console.log('\nTudo certo ✅');
   } catch (e) {

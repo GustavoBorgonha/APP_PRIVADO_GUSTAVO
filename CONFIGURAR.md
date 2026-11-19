@@ -61,3 +61,23 @@ Sempre que o arquivo [`firestore.rules`](firestore.rules) mudar, cole a versão 
   aparelhos. Sem ela, as categorias ficam salvas só no aparelho onde foram criadas.
 - Novembro/2026: entrou a regra `agendados` (lançamentos futuros). Sem ela, os agendamentos ficam
   salvos só no aparelho onde foram criados.
+- Novembro/2026: entraram as regras `tarefas` e `pessoas` (calendário). Sem elas, o calendário
+  fica salvo só no aparelho onde foi usado.
+
+## Avisos de WhatsApp do calendário
+
+Os avisos saem pela mesma ponte do Google (Apps Script) da planilha de cidades, usando o
+**CallMeBot** (gratuito e não oficial).
+
+1. **Atualizar a ponte:** abra o projeto do Apps Script, apague o código e cole o de
+   [`apps-script/Codigo.gs`](apps-script/Codigo.gs). Lembre de preencher de novo `EMAILS_PERMITIDOS`
+   com os e-mails de vocês dois. Salve.
+2. **Publicar a versão nova** (o endereço continua o mesmo): **Implantar → Gerenciar implantações →
+   lápis (editar) → Versão: Nova versão → Implantar**.
+3. **Ligar o relógio dos avisos:** no editor, no menu de funções lá em cima, escolha **instalarAvisos**
+   e clique em **Executar**. Aceite as permissões. Só precisa fazer uma vez.
+4. **Cada pessoa ativa o próprio WhatsApp:** no app, **Agenda → Pessoas e WhatsApp**, toque no nome e
+   siga "Como ativar o aviso no WhatsApp". Depois toque em **Enviar teste**.
+
+Como funciona: quando alguém cria uma tarefa para o outro, chega um WhatsApp na hora. Enquanto a
+pessoa não tocar em **👀 Vi**, todo dia às 8h chega um resumo com o que falta ver (e o que é para hoje).
