@@ -164,7 +164,7 @@ function salvar() {
   }
   if (App.modo !== 'local') return;
   try { localStorage.setItem(CHAVE, JSON.stringify(db)); }
-  catch (e) { alert('Não foi possível salvar os dados neste navegador. Faça um backup em "Dados".'); }
+  catch (e) { alert('Não foi possível salvar os dados neste navegador. Faça um backup em "Configurações".'); }
 }
 
 /* App: estado da conexão. modo = 'local' | 'carregando' | 'login' | 'nuvem' */
@@ -864,12 +864,13 @@ function vExtratos() {
 
 function vDados() {
   return `
-    <h1>Seus dados</h1>
+    <h1>Configurações</h1>
     ${App.modo === 'nuvem'
       ? `<p class="sub">Dados sincronizados na nuvem e compartilhados entre os usuários autorizados.</p>
         <div class="card"><h2>Conta</h2><p style="margin-top:0">Conectado como <strong>${esc(App.usuario?.email)}</strong></p>
         <button class="btn" data-a="sair">Sair</button></div>`
       : `<p class="sub">Modo local: tudo fica salvo neste aparelho/navegador. Faça backups com frequência.</p>`}
+    ${cartaoPessoas(eu())}
     ${vSeuPanda()}
         <div class="card"><h2>Categorias</h2>
       <p class="muted">Crie categorias e escolha um emoji ou uma imagem para cada uma.</p>
@@ -1556,7 +1557,14 @@ document.addEventListener('change', e => {
   }
   else if (c === 'calFeito') {
     const t = (db.tarefas || []).find(x => x.id === el.dataset.i); if (!t) return;
-    const e = eu(); t.feito = el.checked; t.feitoEm = el.checked ? new Date().toISOString() : ''; t.feitoPor = el.checked && e ? e.id : '';
+    const e = eu();
+    if (ehRotina(t)) {
+      // Rotina: marca só aquele dia (e esquece marcações com mais de 1 ano, para o documento não crescer à toa).
+      const d = el.dataset.d, limite = somaDias(hoje(), -366), feitos = {};
+      Object.entries(t.feitos || {}).forEach(([k, v]) => { if (k >= limite) feitos[k] = v; });
+      if (el.checked) feitos[d] = { em: new Date().toISOString(), por: e ? e.id : '' }; else delete feitos[d];
+      t.feitos = feitos;
+    } else { t.feito = el.checked; t.feitoEm = el.checked ? new Date().toISOString() : ''; t.feitoPor = el.checked && e ? e.id : ''; }
     if (t.feito) reagir('feliz', 'Tarefa feita! 💪');
   }
   else if (c === 'rev') {

@@ -124,7 +124,9 @@ function testarChave() {
    O app manda as tarefas abertas (e as pessoas) sempre que algo muda. A ponte guarda isso e:
      - na hora: avisa cada pessoa de uma tarefa que ela ainda não viu (uma vez por tarefa);
      - todo dia às 8h (relógio criado por instalarAvisos): manda um resumo por pessoa com o que
-       ela ainda não viu e o que é para hoje.
+       ela ainda não viu e o que é para hoje;
+     - na hora de cada tarefa/rotina: lembrete no começo de cada período e, se não marcar como feito,
+       outro no fim (rotina com "só lembrete" não cobra).
    Grupo (recomendado): no app, "Conectar grupo" abre o Telegram para pôr o robô num grupo do casal
    (o Telegram manda /start grupo lá). Com grupo ligado, tudo vai para o grupo, uma vez só.
    Sem grupo: cada pessoa toca em "Conectar" no app (abre o robô com /start <id da pessoa>).
@@ -166,7 +168,7 @@ function lerTelegram() {
       chats[id] = m.chat.id;
       telegram('sendMessage', { chat_id: m.chat.id, text: '🐼 Pronto! Os avisos do calendário do Meu Controle vão chegar aqui. Pode voltar para o app e tocar em 🔄 Atualizar.' });
     } else if (/^\/start/.test(m.text)) {
-      telegram('sendMessage', { chat_id: m.chat.id, text: 'Para ligar os avisos, abra o app → Agenda → Pessoas e Telegram → Conectar.' });
+      telegram('sendMessage', { chat_id: m.chat.id, text: 'Para ligar os avisos, abra o app → Configurações → Pessoas e Telegram → Conectar.' });
     }
   });
   props.setProperty('tgChats', JSON.stringify(chats));
@@ -225,7 +227,7 @@ function avisarNovas(dados) {
       if (!falta.length) return;
       const chave = t.id + '|grupo|' + (t.alterada || '');
       if (avisados[chave]) { novo[chave] = avisados[chave]; return; }
-      const texto = '🐼 <b>Nova tarefa' + (primeiro(t.por) ? ' de ' + primeiro(t.por) : '') + '</b>\n' + html(t.titulo) + '\n📅 ' + quando(t) +
+      const texto = '🐼 <b>' + (ehRotina(t) ? 'Nova rotina' : 'Nova tarefa') + (primeiro(t.por) ? ' de ' + primeiro(t.por) : '') + '</b>\n' + html(t.titulo) + '\n📅 ' + quando(t) +
         '\n👤 Para: ' + (t.para || []).map(primeiro).filter(Boolean).join(' e ') +
         '\n\nAbram o app e toquem em "👀 Vi" para parar os avisos.' + (dados.site ? '\n' + html(dados.site) : '');
       const r = mandar(chats._grupo, texto);
@@ -241,7 +243,7 @@ function avisarNovas(dados) {
       if (avisados[chave]) { novo[chave] = avisados[chave]; return; }
       if (!chats[pid]) return;
       const autor = pessoas[t.por] ? pessoas[t.por].nome.split(' ')[0] : '';
-      const texto = '🐼 <b>Nova tarefa' + (autor ? ' de ' + html(autor) : '') + '</b>\n' + html(t.titulo) + '\n📅 ' + quando(t) +
+      const texto = '🐼 <b>' + (ehRotina(t) ? 'Nova rotina' : 'Nova tarefa') + (autor ? ' de ' + html(autor) : '') + '</b>\n' + html(t.titulo) + '\n📅 ' + quando(t) +
         '\n\nAbra o app e toque em "👀 Vi" para parar os avisos.' + (dados.site ? '\n' + html(dados.site) : '');
       const r = mandar(chats[pid], texto);
       if (r.enviado) { novo[chave] = new Date().toISOString(); enviados++; }
@@ -252,7 +254,7 @@ function avisarNovas(dados) {
   return { enviados: enviados, falhas: falhas };
 }
 
-// Relógio de hora em hora (criado por instalarAvisos): reenvia o que falhou e manda o resumo das 8h.
+// Relógio a cada 5 minutos (criado por instalarAvisos): reenvia o que falhou, lembra na hora e manda o resumo das 8h.
 function avisosDeHora() {
   const dados = lerGrande('tarefas');
   if (!dados || !temToken()) return;
@@ -261,6 +263,7 @@ function avisosDeHora() {
   try {
     avisarNovas(dados);
     const chats = JSON.parse(PropertiesService.getScriptProperties().getProperty('tgChats') || '{}');
+    lembrarNaHora(dados, chats);
     const props = PropertiesService.getScriptProperties();
     const hojeTxt = Utilities.formatDate(new Date(), FUSO, 'yyyy-MM-dd');
     const hora = Number(Utilities.formatDate(new Date(), FUSO, 'H'));
@@ -270,9 +273,13 @@ function avisosDeHora() {
       if (!chats[p.id] && !chats._grupo) return;
       const minhas = dados.tarefas.filter(function (t) { return (t.para || []).indexOf(p.id) >= 0; });
       const naoViu = minhas.filter(function (t) { return (t.vistos || []).indexOf(p.id) < 0; });
-      const hoje = minhas.filter(function (t) { return t.data && t.data <= hojeTxt && naoViu.indexOf(t) < 0; });
+      const hoje = minhas.filter(function (t) {
+        if (naoViu.indexOf(t) >= 0) return false;
+        if (ehRotina(t)) return ocorreEm(t, hojeTxt) && !feitoNo(t, hojeTxt);
+        return t.data && (t.soLembrete ? t.data === hojeTxt : t.data <= hojeTxt);
+      });
       if (!naoViu.length && !hoje.length) return;
-      const item = function (t) { return '• ' + html(t.titulo) + ' (' + quando(t) + ')'; };
+      const item = function (t) { return '• ' + html(t.titulo) + ' (' + (ehRotina(t) && ocorreEm(t, hojeTxt) ? 'hoje' + (horarioTxt(t) ? ', ' + horarioTxt(t) : '') : quando(t)) + ')'; };
       if (chats._grupo) {
         let parte = '<b>' + html(p.nome.split(' ')[0]) + '</b>';
         if (naoViu.length) parte += '\n👀 Ainda não viu:\n' + naoViu.map(item).join('\n');
@@ -294,10 +301,81 @@ function avisosDeHora() {
   } finally { trava.releaseLock(); }
 }
 
+const SEMANA = ['dom', 'seg', 'ter', 'qua', 'qui', 'sex', 'sáb'];
+function dataBr(iso) { const p = iso.split('-'); return p[2] + '/' + p[1] + '/' + p[0]; }
+function horariosDe(t) { return [{ hora: t.hora || '', horaFim: t.horaFim || '' }].concat(t.mais || []).filter(function (h) { return h.hora; }); }
+function horarioTxt(t) {
+  const hs = horariosDe(t); if (!hs.length) return '';
+  return hs.map(function (h) { return h.horaFim ? (hs.length > 1 ? h.hora + '–' + h.horaFim : 'das ' + h.hora + ' às ' + h.horaFim) : (hs.length > 1 ? h.hora : 'às ' + h.hora); }).join(' e ');
+}
+function ehRotina(t) { return t.repete && t.repete !== 'nao'; }
+// Quando é a tarefa: dia e horário, ou a regra da rotina.
 function quando(t) {
   if (!t.data) return 'sem data';
-  const p = t.data.split('-');
-  return p[2] + '/' + p[1] + '/' + p[0] + (t.hora ? ' às ' + t.hora : '');
+  const h = horarioTxt(t);
+  if (!ehRotina(t)) return dataBr(t.data) + (h ? ', ' + h : '');
+  const q = t.repete === 'diaria' ? 'todo dia' : t.repete === 'semanal' ? 'toda ' + (t.dias || []).map(function (d) { return SEMANA[d]; }).join(', ')
+    : 'todo dia ' + Number(t.data.slice(8)) + ' do mês';
+  return q + (h ? ', ' + h : '') + (t.ate ? ' (até ' + dataBr(t.ate) + ')' : '');
+}
+function ocorreEm(t, iso) {
+  if (!t.data || iso < t.data) return false;
+  if (!ehRotina(t)) return iso === t.data;
+  if (t.ate && iso > t.ate) return false;
+  if (t.repete === 'diaria') return true;
+  if (t.repete === 'semanal') return (t.dias || []).indexOf(new Date(iso + 'T12:00:00Z').getUTCDay()) >= 0;
+  if (t.repete === 'mensal') {
+    const p = iso.split('-').map(Number), ultimo = new Date(Date.UTC(p[0], p[1], 0)).getUTCDate();
+    return p[2] === Math.min(Number(t.data.slice(8)), ultimo);
+  }
+  return false;
+}
+function feitoNo(t, iso) { return ehRotina(t) && (t.feitos || []).indexOf(iso) >= 0; }
+function maisMinutos(hora, min) {
+  const p = hora.split(':').map(Number), tot = Math.min(23 * 60 + 59, p[0] * 60 + p[1] + min);
+  return ('0' + Math.floor(tot / 60)).slice(-2) + ':' + ('0' + (tot % 60)).slice(-2);
+}
+function minutos(hora) { const p = hora.split(':').map(Number); return p[0] * 60 + p[1]; }
+
+// Lembretes na hora: no começo de cada período e, se ninguém marcar como feito, no fim do último
+// período (ou 1 hora depois da hora, quando não há fim). "Só lembrete" não cobra o feito.
+// Só lembra do que é recente (até 1 hora de atraso), para não mandar um monte de uma vez.
+function lembrarNaHora(dados, chats) {
+  const props = PropertiesService.getScriptProperties();
+  const agora = new Date(), hojeTxt = Utilities.formatDate(agora, FUSO, 'yyyy-MM-dd'), hm = Utilities.formatDate(agora, FUSO, 'HH:mm');
+  const ja = JSON.parse(props.getProperty('lembretes') || '{}'), novo = {};
+  Object.keys(ja).forEach(function (k) { if (k.indexOf('|' + hojeTxt + '|') >= 0) novo[k] = ja[k]; });
+  const pessoas = {}; dados.pessoas.forEach(function (p) { pessoas[p.id] = p; });
+  const destinos = function (t) {
+    if (chats._grupo) return [chats._grupo];
+    return (t.para || []).map(function (pid) { return chats[pid]; }).filter(Boolean);
+  };
+  const para = function (t) { return (t.para || []).map(function (pid) { return pessoas[pid] ? html(pessoas[pid].nome.split(' ')[0]) : ''; }).filter(Boolean).join(' e '); };
+  const enviar = function (t, chave, texto) {
+    if (novo[chave]) return;
+    destinos(t).forEach(function (c) { mandar(c, texto); });
+    novo[chave] = agora.toISOString();
+  };
+  dados.tarefas.forEach(function (t) {
+    if (!ocorreEm(t, hojeTxt) || feitoNo(t, hojeTxt)) return;
+    const hs = horariosDe(t); if (!hs.length) return;
+    const quem = chats._grupo && para(t) ? '\n👤 ' + para(t) : '';
+    hs.forEach(function (h) {
+      const atraso = minutos(hm) - minutos(h.hora);
+      if (atraso >= 0 && atraso <= 60) {
+        enviar(t, t.id + '|' + hojeTxt + '|' + h.hora, '⏰ <b>Agora:</b> ' + html(t.titulo) + '\n🕒 ' + (h.horaFim ? h.hora + ' às ' + h.horaFim : h.hora) + quem +
+          (t.soLembrete ? '' : '\n\nQuando fizer, marque no app ✅'));
+      }
+    });
+    if (t.soLembrete) return;
+    const ult = hs[hs.length - 1], fim = ult.horaFim || maisMinutos(ult.hora, 60);
+    const atrasoFim = minutos(hm) - minutos(fim);
+    if (atrasoFim >= 0 && atrasoFim <= 120) {
+      enviar(t, t.id + '|' + hojeTxt + '|fim', '⚠️ <b>Ainda não marcado como feito:</b> ' + html(t.titulo) + ' (' + horarioTxt(t) + ')' + quem +
+        (dados.site ? '\n' + html(dados.site) : ''));
+    }
+  });
+  props.setProperty('lembretes', JSON.stringify(novo));
 }
 
 function mandar(chat, texto) {
@@ -352,11 +430,11 @@ function lerGrande(nome) {
   try { return JSON.parse(txt); } catch (e) { return null; }
 }
 
-// Rode 1 vez no editor (escolha "instalarAvisos" e clique em Executar): cria o relógio de hora em hora.
+// Rode no editor (escolha "instalarAvisos" e clique em Executar): cria o relógio que roda a cada 5 minutos.
 function instalarAvisos() {
   ScriptApp.getProjectTriggers().forEach(function (g) { if (g.getHandlerFunction() === 'avisosDeHora') ScriptApp.deleteTrigger(g); });
-  ScriptApp.newTrigger('avisosDeHora').timeBased().everyHours(1).create();
-  Logger.log('Pronto: o relógio dos avisos foi criado (roda de hora em hora; resumo às ' + HORA_RESUMO + 'h).');
+  ScriptApp.newTrigger('avisosDeHora').timeBased().everyMinutes(5).create();
+  Logger.log('Pronto: o relógio dos avisos foi criado (roda a cada 5 minutos: lembretes na hora e resumo às ' + HORA_RESUMO + 'h).');
 }
 
 // Diagnóstico do Telegram: escolha "testarTelegram" e clique em Executar; o resultado aparece no registro.

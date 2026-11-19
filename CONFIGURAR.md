@@ -79,8 +79,9 @@ Telegram que é só seu (gratuito e oficial).
 3. **Publicar a versão nova** (o endereço continua o mesmo): **Implantar → Gerenciar implantações →
    lápis (editar) → Versão: Nova versão → Implantar**.
 4. **Ligar o relógio dos avisos:** no editor, escolha a função **instalarAvisos** e clique em **Executar**.
-   Aceite as permissões. Só precisa fazer uma vez (se já fez antes, não precisa repetir).
-5. **Conectar o grupo do casal:** no Telegram, crie um grupo com vocês dois. No app, **Agenda →
+   Aceite as permissões. O relógio roda a cada 5 minutos (lembretes na hora das rotinas). Se você rodou
+   antes de novembro/2026 (versão de hora em hora), rode de novo.
+5. **Conectar o grupo do casal:** no Telegram, crie um grupo com vocês dois. No app, **Configurações →
    Pessoas e Telegram → Conectar grupo**: o Telegram pergunta em qual grupo pôr o robô; escolha o de
    vocês. O robô dá "Oi, casal!" no grupo. Volte ao app, toque em **🔄 Atualizar** e em **Enviar teste**.
    (Se preferir cada um no privado: **Conectar** ao lado de cada nome, no celular de cada um.)

@@ -27,7 +27,7 @@ PWA em JavaScript puro (sem framework, sem build) para finanças pessoais e plan
   Mascote: panda em `panda.js` (`PandaSVG` desenha humores/acessórios; `Mascote` cuida de reações,
   cochilo por inatividade e falas). Estilo chibi; poses por humor: deitado (preguiça/dormindo, com lua),
   ✌️ (feliz) e golpe de kung fu (bravo). Acessórios ficam no localStorage (`apg-panda`), por aparelho,
-  e são escolhidos no "Provador do panda" da aba Dados (`vSeuPanda`: cartões com mini pandas).
+  e são escolhidos no "Provador do panda" da aba Configurações (`vSeuPanda`: cartões com mini pandas).
   `icons/panda.svg` e `icons/icon.svg` são gerados a partir do `PandaSVG`. Fonte Outfit em `fonts/`.
 - Categorias: `CATS_PADRAO` (as que vêm com o app) + `db.categorias` (novas e alterações; coleção
   `categorias` no Firestore, em lote separado; sem a regra, ficam no aparelho em `apg-categorias`).
@@ -41,7 +41,7 @@ PWA em JavaScript puro (sem framework, sem build) para finanças pessoais e plan
   (cadastrada ou solta) para outra; os de tipo incompatível com o destino ficam onde estão.
 - Categoria "Transferência entre contas" (`TRANSF`): aparece no extrato, mas fica fora de receitas,
   despesas e saldo (`contaNoSaldo`). Na importação é sugerida quando o nome do usuário aparece no movimento.
-- `app.js` — toda a lógica e as telas (Início, Finanças, Extratos, Planos, Dados).
+- `app.js` — toda a lógica e as telas (Início, Finanças, Extratos, Planos, Agenda, Configurações).
   O estado fica em `db = { lancamentos, planos }`; toda mudança chama `salvar()` e `render()`.
 - `extrato.js` — lê extratos do banco (OFX e CSV com Crédito/Débito) e sugere descrição/categoria
   (`Extrato.preparar`). Nunca grava direto: os itens vão para `ui.triagem` e a tela `vTriagem` (em
@@ -106,6 +106,13 @@ PWA em JavaScript puro (sem framework, sem build) para finanças pessoais e plan
   muda, assinatura em `apg-avisos-env`). A ponte avisa na hora quem não viu e, com o relógio `instalarAvisos`/`avisosDeHora`,
   manda um resumo às 8h; não grava no Firebase. Tarefa editada (texto/dia/hora) zera os vistos e conta como nova.
   O WhatsApp (CallMeBot) foi testado e removido: o robô não respondia.
+  Rotinas: `repete` (nao/diaria/semanal/mensal), `dias` (0=dom…6=sáb, semanal), `ate` (vazio = sem fim), `feitos`
+  { data: { em, por } } por dia (marcações com mais de 1 ano são descartadas); hora obrigatória, `horaFim` opcional
+  e `mais` [{hora, horaFim}] para vários períodos no dia; `soLembrete` = não precisa marcar como feito.
+  Funções: `ocorreEm`, `ocorrenciasCal(de, ate)` (não confundir com `ocorrencias` da agenda.js), `feitoNo`,
+  `proximaData`, `horarioTxt`. Exemplos prontos no formulário (remédio, plantas, trabalho).
+  A ponte (relógio de 5 em 5 min, `lembrarNaHora`) lembra no começo de cada período e, sem "feito", no fim.
+  Pessoas e Telegram ficam na aba Configurações (antiga "Dados"; `vDados`, `cartaoPessoas`).
 - `cidades.js` + `planilha-config.js` — tela "Cidades de SC" (aba interna `cidades`, entrada pelo cartão em
   Planos), espelho da planilha do Google "Cidades_SC_visitadas" (aba Cidades). A planilha é a fonte: o app
   fala com ela por uma ponte em Apps Script (`apps-script/Codigo.gs`, publicada como App da Web; a URL vai em

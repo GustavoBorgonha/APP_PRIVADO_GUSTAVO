@@ -691,7 +691,7 @@ async function modoNuvem(navegador, url, erros) {
   await p.waitForFunction(() => window.__store.lancamentos.size === 0);
   confere(true, 'lançamento apagado some da nuvem');
 
-  await p.click('.nav >> text=Dados');
+  await p.click('.nav >> text=Configurações');
   await p.click('text=Sair');
   await p.waitForSelector('text=Entrar com Google');
   confere(true, 'sair volta para a tela de entrada');
@@ -730,6 +730,8 @@ async function calendarioTarefas(navegador, url, erros) {
     await p.click('#modal button.pri');
   };
   await novaPessoa('Maria');
+  await p.click('.nav >> text=Configurações');
+  confere(await p.isVisible('h1:has-text("Configurações")') && await p.isVisible('text=Pessoas e Telegram'), 'pessoas e Telegram ficam em Configurações');
   await novaPessoa('João', 'joao@teste.com');
   await p.waitForFunction(() => window.__store.pessoas.size === 2);
   const ids = await p.evaluate(() => Object.fromEntries([...window.__store.pessoas.values()].map(x => [x.nome, x.id])));
@@ -748,7 +750,8 @@ async function calendarioTarefas(navegador, url, erros) {
   confere(await p.locator('.cal-grupo [data-a=calTeste][data-v=_grupo]').count() === 1, 'grupo conectado: avisos vão para o grupo, com teste próprio');
   confere(await p.isVisible('.cal-pessoa >> text=(você)'), 'o app reconhece quem está usando pelo e-mail');
 
-  await p.click('.topo [data-a=calNova]');
+  await p.click('.nav >> text=Agenda');
+  await p.click('.topo [data-a=calNova]:not([data-v=rotina])');
   await p.fill('#modal [name=titulo]', 'Ligar para o fotógrafo');
   await p.fill('#modal [name=hora]', '19:30');
   await p.click('#modal button.pri');
@@ -776,6 +779,30 @@ async function calendarioTarefas(navegador, url, erros) {
   for (let i = 0; i < 40 && !(pedidos.filter(x => x.acao === 'tarefas').pop().tarefas.every(t => t.id !== 'tf-joao')); i++) await p.waitForTimeout(100);
   confere(pedidos.filter(x => x.acao === 'tarefas').pop().tarefas.every(t => t.id !== 'tf-joao'), 'tarefa concluída sai da lista de avisos');
 
+  // Rotinas: exemplo do remédio (todo dia 10:30 por 10 anos) e do trabalho (seg a sex, dois horários, só lembrete).
+  await p.click('.topo [data-a=calNova][data-v=rotina]');
+  await p.click('#modal [data-ex=remedio]');
+  await p.click('#modal button.pri');
+  await p.waitForFunction(() => [...window.__store.tarefas.values()].some(t => t.repete === 'diaria'));
+  const rem = await p.evaluate(() => [...window.__store.tarefas.values()].find(t => t.repete === 'diaria'));
+  confere(rem.hora === '10:30' && rem.ate.slice(0, 4) === String(+rem.data.slice(0, 4) + 10) && rem.para.length === 1, 'exemplo do remédio: todo dia às 10:30 por 10 anos');
+  confere(await p.evaluate(id => { const t = tarefa(id); return ocorreEm(t, somaDias(hoje(), 1)) && ocorreEm(t, somaDias(hoje(), 3000)) && !ocorreEm(t, somaDias(hoje(), 4000)); }, rem.id), 'rotina acontece todo dia até a data final');
+  await p.evaluate(() => { ui.calDia = hoje(); render(); });
+  await p.locator(`.cal-tarefa:has-text("Tomar o remédio") input[data-d="${rem.data}"]`).first().check();
+  await p.waitForFunction(id => Object.keys(window.__store.tarefas.get(id).feitos || {}).length === 1, rem.id);
+  confere(await p.evaluate(id => feitoNo(tarefa(id), hoje()) && !feitoNo(tarefa(id), somaDias(hoje(), 1)), rem.id), 'marcar a rotina vale só para aquele dia');
+  await p.click('.topo [data-a=calNova][data-v=rotina]');
+  await p.click('#modal [data-ex=trabalho]');
+  await p.click('#modal button.pri');
+  await p.waitForFunction(() => [...window.__store.tarefas.values()].some(t => t.soLembrete));
+  const trab = await p.evaluate(() => [...window.__store.tarefas.values()].find(t => t.soLembrete));
+  confere(trab.dias.join() === '1,2,3,4,5' && trab.hora === '08:00' && trab.horaFim === '12:00' && trab.mais[0].hora === '13:30' && trab.mais[0].horaFim === '18:00',
+    'horário semanal: seg a sex, 08:00–12:00 e 13:30–18:00');
+  confere(await p.isVisible('text=Trabalho 💼') && (await p.textContent('.cal-pessoa:has-text("Trabalho")')).includes('08:00–12:00 e 13:30–18:00'), 'a rotina mostra os dois períodos');
+  for (let i = 0; i < 40 && !pedidos.filter(x => x.acao === 'tarefas').pop().tarefas.some(t => t.soLembrete && t.mais.length); i++) await p.waitForTimeout(100);
+  confere(pedidos.filter(x => x.acao === 'tarefas').pop().tarefas.some(t => t.repete === 'diaria' && t.feitos.length === 1), 'rotinas vão para a ponte com a repetição e o que já foi feito');
+
+  await p.click('.nav >> text=Configurações');
   await p.locator('[data-a=calTeste]').first().click();
   for (let i = 0; i < 30 && !alertas.some(a => a.includes('teste enviada')); i++) await p.waitForTimeout(100);
   confere(pedidos.some(x => x.acao === 'teste') && alertas.some(a => a.includes('teste enviada')), 'botão "Enviar teste" chama a ponte');
