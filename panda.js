@@ -15,14 +15,15 @@
   const VERDE = '#7cc06a', VERDE_E = '#4f8a43';
   const VERMELHO = '#e5484d', VERMELHO_E = '#b9302c';
   const MARROM = '#9a6b45';
+  const SERENITY = '#92a8d1', SERENITY_E = '#6f86b3'; // azul do casamento
 
   const HUMORES = ['fofo', 'feliz', 'triste', 'bravo', 'preguica', 'dormindo'];
 
   const ACESSORIOS = {
-    cabeca: { '': 'Nada', chapeu: 'Chapéu de pescador', bone: 'Boné virado', bandana: 'Bandana ninja (placa)', faixa: 'Faixa de luta', fone: 'Fone de ouvido' },
+    cabeca: { '': 'Nada', chapeu: 'Chapéu de pescador', bone: 'Boné virado', bandana: 'Bandana ninja (placa)', faixa: 'Faixa de luta', fone: 'Fone de ouvido', veu: 'Véu de noiva', cartola: 'Cartola de noivo' },
     rosto: { '': 'Nada', oculos: 'Óculos escuros', bambuBoca: 'Bambu na boca' },
-    roupa: { '': 'Nada', cachecol: 'Cachecol vermelho', casaco: 'Casaquinho', dino: 'Fantasia de dinossauro', moletom: 'Moletom rosa' },
-    mao: { '': 'Nada', bambu: 'Segurando bambu' },
+    roupa: { '': 'Nada', cachecol: 'Cachecol vermelho', casaco: 'Casaquinho', dino: 'Fantasia de dinossauro', moletom: 'Moletom rosa', noivo: 'Terno de noivo', noiva: 'Vestido de noiva' },
+    mao: { '': 'Nada', bambu: 'Segurando bambu', buque: 'Buquê de flores' },
   };
 
   /* ---------- partes do desenho ----------
@@ -81,8 +82,29 @@
     return s;
   }
 
+  // Florzinha de 5 pétalas (tiara, lapela e buquê).
+  const flor = (x, y, r, cor, miolo = '#f6dd8c') => [0, 72, 144, 216, 288].map(ang => {
+    const rad = ang * Math.PI / 180;
+    return `<circle cx="${(x + Math.sin(rad) * r * .62).toFixed(1)}" cy="${(y - Math.cos(rad) * r * .62).toFixed(1)}" r="${(r * .52).toFixed(1)}" fill="${cor}"/>`;
+  }).join('') + `<circle cx="${x}" cy="${y}" r="${(r * .36).toFixed(1)}" fill="${miolo}"/>`;
+
+  // Parte do acessório que fica ATRÁS da cabeça (o véu cai pelos lados).
+  function atrasCabeca(a) {
+    if (a !== 'veu') return '';
+    return `<path d="M100 20 C150 20 176 60 180 110 C182 140 184 160 188 180 Q172 188 158 180 C156 150 154 120 150 100 L50 100 C46 120 44 150 42 180 Q28 188 12 180 C16 160 18 140 20 110 C24 60 50 20 100 20 Z" fill="#ffffff" fill-opacity=".82" stroke="#d9d2c4" stroke-width="2" stroke-linejoin="round"/>` +
+      `<path d="M28 120 Q30 150 26 176 M172 120 Q170 150 174 176 M38 130 Q38 156 34 178 M162 130 Q162 156 166 178" fill="none" stroke="#d9d2c4" stroke-width="1.4" stroke-linecap="round"/>`;
+  }
+
   function cabecaAcessorio(a) {
     switch (a) {
+      case 'veu': return `<path d="M62 44 Q100 22 138 44" fill="none" stroke="#c9b37a" stroke-width="3" stroke-linecap="round"/>` +
+        `<path d="M66 42 q-6 -6 -12 -2 q4 7 12 2z M134 42 q6 -6 12 -2 q-4 7 -12 2z" fill="${VERDE}" stroke="${VERDE_E}" stroke-width="1.2"/>` +
+        flor(72, 38, 9, SERENITY) + flor(86, 31, 9, '#ffffff') + flor(100, 28, 10.5, SERENITY) + flor(114, 31, 9, '#ffffff') + flor(128, 38, 9, SERENITY) +
+        `<circle cx="79" cy="34" r="2" fill="#fffaf0" stroke="#d9d2c4"/><circle cx="121" cy="34" r="2" fill="#fffaf0" stroke="#d9d2c4"/>`;
+      case 'cartola': return `<path d="M72 46 L74 14 Q100 9 126 14 L128 46 Z" fill="#23262e" stroke="#14161b" stroke-width="2.5" stroke-linejoin="round"/>` +
+        `<path d="M73 36 Q100 32 127 36 L128 45 Q100 41 72 45 Z" fill="${SERENITY}"/>` +
+        `<path d="M80 18 Q82 28 80 34" stroke="#ffffff" stroke-opacity=".25" stroke-width="3" stroke-linecap="round" fill="none"/>` +
+        `<path d="M50 50 Q100 36 150 50 Q154 57 146 58 Q100 46 54 58 Q46 57 50 50 Z" fill="#2b2f38" stroke="#14161b" stroke-width="2.5" stroke-linejoin="round"/>`;
       case 'chapeu': return `<path d="M56 52 Q58 12 100 10 Q142 12 144 52 Z" fill="#d6c594" stroke="#a8925f" stroke-width="2.5" stroke-linejoin="round"/>` +
         `<path d="M100 11 V44 M72 20 Q80 34 78 46 M128 20 Q120 34 122 46" fill="none" stroke="#a8925f" stroke-width="1.5" stroke-dasharray="3 3" opacity=".8"/>` +
         `<path d="M58 44 Q100 34 142 44" fill="none" stroke="#a8925f" stroke-width="4"/>` +
@@ -131,9 +153,9 @@
   function PandaSVG(o = {}) {
     const h = HUMORES.includes(o.humor) ? o.humor : 'fofo';
     const casaco = o.roupa === 'casaco';
-    const ROUPA = { casaco: ['#b08460', '#7a5034'], dino: ['#9ccaa0', '#5f9b6b'], moletom: ['#f6b3c9', '#d77b9d'] }[o.roupa];
+    const ROUPA = { noivo: ['#2f3440', '#1b1e26'], noiva: ['#fdfbf6', '#d9d2c4'], casaco: ['#b08460', '#7a5034'], dino: ['#9ccaa0', '#5f9b6b'], moletom: ['#f6b3c9', '#d77b9d'] }[o.roupa];
     const vestido = !!ROUPA;
-    const bambu = o.mao === 'bambu';
+    const bambu = o.mao === 'bambu', buque = o.mao === 'buque';
     const corpo = vestido ? ROUPA[0] : B;
     const manga = vestido ? ROUPA[0] : P;
     const borda = vestido ? ROUPA[1] : C;
@@ -166,7 +188,28 @@
         `<circle cx="100" cy="164" r="2.6" fill="#7a5034"/><circle cx="100" cy="176" r="2.6" fill="#7a5034"/>`) : '') +
       (o.roupa === 'dino' ? enfeite(`<ellipse cx="100" cy="160" rx="30" ry="27" fill="#f1ecd6"/><path d="M76 150 h48 M72 162 h56 M76 174 h48" stroke="#d9cfa6" stroke-width="2.5" stroke-linecap="round"/>`) : '') +
       (o.roupa === 'moletom' ? enfeite(`<path d="M76 158 h48 l5 22 h-58 z" fill="#ef9cb8" stroke="#d77b9d" stroke-width="2" stroke-linejoin="round"/>` +
-        `<path d="M92 140 v16 M108 140 v16" stroke="${B}" stroke-width="2.5" stroke-linecap="round"/><circle cx="92" cy="158" r="2.6" fill="${B}"/><circle cx="108" cy="158" r="2.6" fill="${B}"/>`) : '');
+        `<path d="M92 140 v16 M108 140 v16" stroke="${B}" stroke-width="2.5" stroke-linecap="round"/><circle cx="92" cy="158" r="2.6" fill="${B}"/><circle cx="108" cy="158" r="2.6" fill="${B}"/>`) : '') +
+      // Terno: camisa branca em V, lapelas, gravata-borboleta azul e flor na lapela.
+      (o.roupa === 'noivo' ? enfeite(`<path d="M80 126 L100 172 L120 126 Z" fill="#ffffff"/>` +
+        `<path d="M80 126 L100 172 L90 128 Z M120 126 L100 172 L110 128 Z" fill="#454b59" stroke="#1b1e26" stroke-width="1.5" stroke-linejoin="round"/>` +
+        `<path d="M100 146 L86 139 L86 153 Z M100 146 L114 139 L114 153 Z" fill="${SERENITY}" stroke="${SERENITY_E}" stroke-width="1.8" stroke-linejoin="round"/><circle cx="100" cy="146" r="3.6" fill="${SERENITY_E}"/>` +
+        `<circle cx="100" cy="158" r="2" fill="#2f3440"/><circle cx="100" cy="165" r="2" fill="#2f3440"/>` +
+        `<circle cx="100" cy="182" r="2.6" fill="#14161b"/>` + flor(128, 150, 8, '#ffffff', SERENITY)) : '') +
+      // Vestido: decote com pérolas, faixa azul na cintura e laço.
+      (o.roupa === 'noiva' ? enfeite(`<path d="M76 140 Q100 152 124 140" fill="none" stroke="#e8e1d2" stroke-width="2.5"/>` +
+        [82, 91, 100, 109, 118].map(x => `<circle cx="${x}" cy="${144 + (x === 100 ? 4 : Math.abs(x - 100) < 12 ? 3 : 1)}" r="2.2" fill="#fffaf0" stroke="#d9d2c4" stroke-width="1"/>`).join('') +
+        `<path d="M58 160 Q100 172 142 160 L142 169 Q100 181 58 169 Z" fill="${SERENITY}" stroke="${SERENITY_E}" stroke-width="1.5"/>` +
+        `<path d="M100 170 l-10 -7 v14 z M100 170 l10 -7 v14 z" fill="${SERENITY}" stroke="${SERENITY_E}" stroke-width="1.5" stroke-linejoin="round"/><circle cx="100" cy="170" r="3" fill="${SERENITY_E}"/>`) : '');
+    // Saia rodada do vestido de noiva (atrás da barriga e das patinhas).
+    const saia = o.roupa === 'noiva' ? `<path d="M64 156 Q46 178 30 194 Q100 202 170 194 Q154 178 136 156 Z" fill="#fdfbf6" stroke="#d9d2c4" stroke-width="2.4" stroke-linejoin="round"/>` +
+      `<path d="M58 172 Q52 184 46 192 M80 168 Q76 182 74 196 M120 168 Q124 182 126 196 M142 172 Q148 184 154 192" fill="none" stroke="#e8e1d2" stroke-width="1.8" stroke-linecap="round"/>` +
+      `<path d="M30 194 q10 4 20 0 q10 4 20 0 q10 4 20 0 q10 4 20 0 q10 4 20 0 q10 4 20 0 q10 4 20 0" fill="none" stroke="#d9d2c4" stroke-width="1.8"/>` : '';
+    // Buquê azul e branco erguido na patinha direita (mesma pose do bambu).
+    const ramalhete = buque ? `<g class="buque"><path d="M170 128 L166 150 M174 128 V150 M178 128 L182 150" stroke="${VERDE_E}" stroke-width="3" stroke-linecap="round"/>` +
+      `<path d="M156 122 q-9 -3 -10 5 q7 3 10 -5z M192 122 q9 -3 10 5 q-7 3 -10 -5z" fill="${VERDE}" stroke="${VERDE_E}" stroke-width="1.2"/>` +
+      flor(164, 122, 10, '#ffffff') + flor(184, 122, 10, '#ffffff') + flor(174, 128, 10, SERENITY) + flor(168, 110, 10, SERENITY) + flor(180, 110, 10, '#ffffff') + flor(174, 117, 9, SERENITY) +
+      `<path d="M167 136 Q174 142 181 136 L180 143 Q174 147 168 143 Z" fill="#ffffff" stroke="#d9d2c4" stroke-width="1.5"/>` +
+      `<circle cx="172" cy="148" r="8.5" fill="${P}" ${t}/></g>` : '';
 
     const vara = bambu ? `<g transform="rotate(6 173 150)"><rect x="166" y="64" width="14" height="126" rx="7" fill="${VERDE}" stroke="${VERDE_E}" stroke-width="2.4"/>` +
       `<path d="M166 94h14M166 124h14M166 156h14" stroke="${VERDE_E}" stroke-width="2.4"/>` +
@@ -177,7 +220,7 @@
     const mao = (x, y) => vestido ? `<circle cx="${x}" cy="${y}" r="8" fill="${P}" ${t}/>` : '';
     const braco = (x, y, rot) => `<ellipse cx="${x}" cy="${y}" rx="12.5" ry="20" transform="rotate(${rot} ${x} ${y})" fill="${manga}" stroke="${borda}" stroke-width="2.6"/>`;
     const bracoE = braco(60, 156, 22) + mao(53, 172);
-    const bracoD = bambu ? braco(150, 150, -62) + mao(166, 142) : braco(140, 156, -22) + mao(147, 172);
+    const bracoD = bambu || buque ? braco(150, 150, -62) + mao(166, 142) : braco(140, 156, -22) + mao(147, 172);
 
     const cachecol = o.roupa === 'cachecol'
       ? `<path d="M50 132 Q100 156 150 132 L153 147 Q100 171 47 147 Z" fill="${VERMELHO}" stroke="${VERMELHO_E}" stroke-width="2"/>` +
@@ -190,7 +233,7 @@
       `<path d="M${x - 4} 115 l-2 4 M${x + 1} 115 l-2 4 M${x + 6} 115 l-2 4" stroke="#e8778a" stroke-width="1.2" stroke-linecap="round" opacity=".6"/>`;
 
     const cabeca = `<g class="cabeca">
-      ${capuz}${orelhas}
+      ${atrasCabeca(o.cabeca)}${capuz}${orelhas}
       <path d="M100 28 C142 28 170 54 170 92 C170 126 140 144 100 144 C60 144 30 126 30 92 C30 54 58 28 100 28 Z" fill="${B}" ${t}/>
       <path d="M36 108 C52 134 148 134 164 108 C160 132 136 142 100 142 C64 142 40 132 36 108 Z" fill="${SOMBRA}" opacity=".8"/>
       ${capuzado || o.cabeca ? '' : `<path d="M90 30 q1 -9 6 -3 q2 -9 7 -1 q4 -6 7 4" fill="${B}" ${t}/>`}
@@ -239,7 +282,7 @@
         `<path d="M4 132 l-4 -3 M2 146 h-2 M5 160 l-4 3" stroke="${C}" stroke-width="2" stroke-linecap="round" opacity=".5"/>`;
     }
 
-    return abre + chao + rabo + vara + barriga + pes + (gesto ? '' : bracoE) + bracoD + cabeca + cachecol +
+    return abre + chao + rabo + vara + saia + barriga + pes + (gesto ? '' : bracoE) + bracoD + cabeca + cachecol + ramalhete +
       (gesto ? `<g class="gesto">${gesto}</g>` : '') + fx + `</svg>`;
   }
 
