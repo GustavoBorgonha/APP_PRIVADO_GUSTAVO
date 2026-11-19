@@ -702,7 +702,7 @@ async function modoNuvem(navegador, url, erros) {
 async function calendarioTarefas(navegador, url, erros) {
   console.log('Calendário de tarefas (ponte do Telegram simulada)');
   const PONTE = 'https://script.google.com/macros/s/TESTE/exec';
-  const pedidos = []; let ligados = [];
+  const pedidos = []; let ligados = [], grupo = false;
   const ctx = await navegador.newContext();
   await ctx.route('**/firebase-config.js', r => r.fulfill({ contentType: 'text/javascript', body: 'window.FIREBASE_CONFIG = { apiKey: "teste" };' }));
   await ctx.route('**/planilha-config.js', r => r.fulfill({ contentType: 'text/javascript', body: `window.PLANILHA_CIDADES = { url: '${PONTE}', id: 'abc' };` }));
@@ -710,7 +710,7 @@ async function calendarioTarefas(navegador, url, erros) {
     contentType: 'text/javascript', headers: { 'access-control-allow-origin': '*' }, body: FIREBASE_FALSO[r.request().url().split('/').pop()] }));
   await ctx.route(PONTE, r => {
     const pedido = JSON.parse(r.request().postData()); pedidos.push(pedido);
-    const corpo = pedido.acao === 'teste' ? { ok: true, enviado: true } : pedido.acao === 'telegram' ? { ok: true, bot: 'MeuControleBot', ligados } : pedido.acao === 'tarefas' ? { ok: true, enviados: 1, falhas: [] } : { ok: true, cidades: [] };
+    const corpo = pedido.acao === 'teste' ? { ok: true, enviado: true } : pedido.acao === 'telegram' ? { ok: true, bot: 'MeuControleBot', ligados, grupo } : pedido.acao === 'tarefas' ? { ok: true, enviados: 1, falhas: [] } : { ok: true, cidades: [] };
     r.fulfill({ contentType: 'application/json', headers: { 'access-control-allow-origin': '*' }, body: JSON.stringify(corpo) });
   });
   const p = await ctx.newPage();
@@ -741,6 +741,11 @@ async function calendarioTarefas(navegador, url, erros) {
   await p.click('[data-a=calTg]');
   await p.waitForSelector('.cal-pessoa >> text=Telegram conectado');
   confere(await p.locator('[data-a=calTeste]').count() === 2, 'depois de tocar em Iniciar no robô, aparece como conectado');
+  confere(await p.locator('.cal-grupo a[href="https://t.me/MeuControleBot?startgroup=grupo"]').count() === 1, 'oferece colocar o robô num grupo do casal');
+  grupo = true;
+  await p.click('[data-a=calTg]');
+  await p.waitForSelector('.cal-grupo >> text=todos os avisos vão para o grupo');
+  confere(await p.locator('.cal-grupo [data-a=calTeste][data-v=_grupo]').count() === 1, 'grupo conectado: avisos vão para o grupo, com teste próprio');
   confere(await p.isVisible('.cal-pessoa >> text=(você)'), 'o app reconhece quem está usando pelo e-mail');
 
   await p.click('.topo [data-a=calNova]');

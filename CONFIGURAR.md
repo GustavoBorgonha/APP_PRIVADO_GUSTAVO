@@ -80,9 +80,10 @@ Telegram que é só seu (gratuito e oficial).
    lápis (editar) → Versão: Nova versão → Implantar**.
 4. **Ligar o relógio dos avisos:** no editor, escolha a função **instalarAvisos** e clique em **Executar**.
    Aceite as permissões. Só precisa fazer uma vez (se já fez antes, não precisa repetir).
-5. **Cada pessoa conecta o próprio Telegram:** no app, **Agenda → Pessoas e Telegram → Conectar**
-   (ou **Copiar link** e mandar para a outra pessoa). No Telegram, toque em **Iniciar**. Volte ao app,
-   toque em **🔄 Atualizar** e depois em **Enviar teste**.
+5. **Conectar o grupo do casal:** no Telegram, crie um grupo com vocês dois. No app, **Agenda →
+   Pessoas e Telegram → Conectar grupo**: o Telegram pergunta em qual grupo pôr o robô; escolha o de
+   vocês. O robô dá "Oi, casal!" no grupo. Volte ao app, toque em **🔄 Atualizar** e em **Enviar teste**.
+   (Se preferir cada um no privado: **Conectar** ao lado de cada nome, no celular de cada um.)
 
 Como funciona: quando alguém cria uma tarefa para o outro, chega uma mensagem na hora. Enquanto a
 pessoa não tocar em **👀 Vi**, todo dia às 8h chega um resumo com o que falta ver (e o que é para hoje).

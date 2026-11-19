@@ -100,7 +100,8 @@ PWA em JavaScript puro (sem framework, sem build) para finanças pessoais e plan
   Quem cria já conta como visto; "👀 Vi" (`calVi`) para os avisos. Aviso no Início (`avisoTarefas`).
   Avisos pelo **Telegram** (robô próprio do @BotFather; token só no Apps Script, `TELEGRAM_TOKEN`). Cada pessoa conecta
   pelo link `t.me/<robô>?start=<pessoaId>` (botões Conectar/Copiar link); a ponte lê `/start` com `getUpdates` e guarda
-  o chat nas Propriedades do script (`tgChats`). `estadoTg`/`carregarTg` (acao `telegram`) mostram quem está conectado.
+  o chat nas Propriedades do script (`tgChats`). Grupo do casal (recomendado): link `t.me/<robô>?startgroup=grupo` →
+  `tgChats._grupo`; com grupo, cada tarefa e o resumo das 8h vão uma vez só para o grupo ("Para: Gustavo e Sara"). `estadoTg`/`carregarTg` (acao `telegram`) mostram quem está conectado.
   `avisarTarefas()` (chamado em `salvar()`) manda as tarefas abertas + pessoas para a ponte (`acao: 'tarefas'`; só quando
   muda, assinatura em `apg-avisos-env`). A ponte avisa na hora quem não viu e, com o relógio `instalarAvisos`/`avisosDeHora`,
   manda um resumo às 8h; não grava no Firebase. Tarefa editada (texto/dia/hora) zera os vistos e conta como nova.

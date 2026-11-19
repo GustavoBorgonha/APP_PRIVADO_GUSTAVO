@@ -125,8 +125,10 @@ function testarChave() {
      - na hora: avisa cada pessoa de uma tarefa que ela ainda não viu (uma vez por tarefa);
      - todo dia às 8h (relógio criado por instalarAvisos): manda um resumo por pessoa com o que
        ela ainda não viu e o que é para hoje.
-   Cada pessoa liga o Telegram tocando em "Conectar" no app: abre o robô com /start <id da pessoa>.
-   A ponte lê essas mensagens (getUpdates) e guarda o chat de cada pessoa nas Propriedades do script.
+   Grupo (recomendado): no app, "Conectar grupo" abre o Telegram para pôr o robô num grupo do casal
+   (o Telegram manda /start grupo lá). Com grupo ligado, tudo vai para o grupo, uma vez só.
+   Sem grupo: cada pessoa toca em "Conectar" no app (abre o robô com /start <id da pessoa>).
+   A ponte lê essas mensagens (getUpdates) e guarda os chats nas Propriedades do script.
    Nada disso grava no Firebase.
    ========================================================= */
 const FUSO = 'America/Sao_Paulo';
@@ -153,9 +155,14 @@ function lerTelegram() {
   let ultimo = offset - 1;
   (j.result || []).forEach(function (u) {
     ultimo = Math.max(ultimo, u.update_id);
-    const m = u.message; if (!m || !m.text || !m.chat) return;
-    const id = (m.text.match(/^\/start\s+(\S+)/) || [])[1];
-    if (id) {
+    const m = u.message; if (!m || !m.chat) return;
+    if (m.migrate_to_chat_id && chats._grupo === m.chat.id) chats._grupo = m.migrate_to_chat_id;   // grupo virou supergrupo
+    if (!m.text) return;
+    const id = (m.text.match(/^\/start(?:@\S+)?\s+(\S+)/) || [])[1];
+    if (id === 'grupo') {
+      chats._grupo = m.chat.id;
+      telegram('sendMessage', { chat_id: m.chat.id, text: '🐼 Oi, casal! A partir de agora os avisos do calendário do Meu Controle chegam neste grupo. Voltem ao app e toquem em 🔄 Atualizar.' });
+    } else if (id) {
       chats[id] = m.chat.id;
       telegram('sendMessage', { chat_id: m.chat.id, text: '🐼 Pronto! Os avisos do calendário do Meu Controle vão chegar aqui. Pode voltar para o app e tocar em 🔄 Atualizar.' });
     } else if (/^\/start/.test(m.text)) {
@@ -178,7 +185,7 @@ function estadoTelegram() {
       bot = me.result.username; props.setProperty('tgBot', bot);
     }
     const chats = lerTelegram();
-    return { ok: true, bot: bot, ligados: Object.keys(chats) };
+    return { ok: true, bot: bot, ligados: Object.keys(chats).filter(function (k) { return k !== '_grupo'; }), grupo: !!chats._grupo };
   } catch (e) {
     return { ok: true, ligados: [], erroTelegram: String((e && e.message) || e) };
   }
@@ -210,6 +217,23 @@ function avisarNovas(dados) {
   const avisados = JSON.parse(props.getProperty('avisados') || '{}');
   const pessoas = {}; dados.pessoas.forEach(function (p) { pessoas[p.id] = p; });
   const novo = {}, falhas = []; let enviados = 0;
+  const primeiro = function (id) { return pessoas[id] ? html(pessoas[id].nome.split(' ')[0]) : ''; };
+  if (chats._grupo) {
+    // Grupo: uma mensagem por tarefa, dizendo para quem é e quem ainda não viu.
+    dados.tarefas.forEach(function (t) {
+      const falta = (t.para || []).filter(function (pid) { return (t.vistos || []).indexOf(pid) < 0; });
+      if (!falta.length) return;
+      const chave = t.id + '|grupo|' + (t.alterada || '');
+      if (avisados[chave]) { novo[chave] = avisados[chave]; return; }
+      const texto = '🐼 <b>Nova tarefa' + (primeiro(t.por) ? ' de ' + primeiro(t.por) : '') + '</b>\n' + html(t.titulo) + '\n📅 ' + quando(t) +
+        '\n👤 Para: ' + (t.para || []).map(primeiro).filter(Boolean).join(' e ') +
+        '\n\nAbram o app e toquem em "👀 Vi" para parar os avisos.' + (dados.site ? '\n' + html(dados.site) : '');
+      const r = mandar(chats._grupo, texto);
+      if (r.enviado) { novo[chave] = new Date().toISOString(); enviados++; } else falhas.push('Grupo: ' + r.resposta);
+    });
+    props.setProperty('avisados', JSON.stringify(novo));
+    return { enviados: enviados, falhas: falhas };
+  }
   dados.tarefas.forEach(function (t) {
     (t.para || []).forEach(function (pid) {
       const chave = t.id + '|' + pid + '|' + (t.alterada || '');
@@ -241,13 +265,21 @@ function avisosDeHora() {
     const hojeTxt = Utilities.formatDate(new Date(), FUSO, 'yyyy-MM-dd');
     const hora = Number(Utilities.formatDate(new Date(), FUSO, 'H'));
     if (hora < HORA_RESUMO || hora >= 22 || props.getProperty('resumoEm') === hojeTxt) return;
+    const partes = [];
     dados.pessoas.forEach(function (p) {
-      if (!chats[p.id]) return;
+      if (!chats[p.id] && !chats._grupo) return;
       const minhas = dados.tarefas.filter(function (t) { return (t.para || []).indexOf(p.id) >= 0; });
       const naoViu = minhas.filter(function (t) { return (t.vistos || []).indexOf(p.id) < 0; });
       const hoje = minhas.filter(function (t) { return t.data && t.data <= hojeTxt && naoViu.indexOf(t) < 0; });
       if (!naoViu.length && !hoje.length) return;
       const item = function (t) { return '• ' + html(t.titulo) + ' (' + quando(t) + ')'; };
+      if (chats._grupo) {
+        let parte = '<b>' + html(p.nome.split(' ')[0]) + '</b>';
+        if (naoViu.length) parte += '\n👀 Ainda não viu:\n' + naoViu.map(item).join('\n');
+        if (hoje.length) parte += '\n📌 Para hoje / atrasadas:\n' + hoje.map(item).join('\n');
+        partes.push(parte);
+        return;
+      }
       let texto = '🐼 <b>Bom dia, ' + html(p.nome.split(' ')[0]) + '!</b>';
       if (naoViu.length) texto += '\n\n👀 <b>Ainda não vistas:</b>\n' + naoViu.map(item).join('\n');
       if (hoje.length) texto += '\n\n📌 <b>Para hoje / atrasadas:</b>\n' + hoje.map(item).join('\n');
@@ -255,6 +287,9 @@ function avisosDeHora() {
       if (dados.site) texto += '\n' + html(dados.site);
       mandar(chats[p.id], texto);
     });
+    if (chats._grupo && partes.length) {
+      mandar(chats._grupo, '🐼 <b>Bom dia, casal!</b>\n\n' + partes.join('\n\n') + '\n\nToquem em "👀 Vi" no app para parar os avisos.' + (dados.site ? '\n' + html(dados.site) : ''));
+    }
     props.setProperty('resumoEm', hojeTxt);
   } finally { trava.releaseLock(); }
 }
@@ -267,7 +302,16 @@ function quando(t) {
 
 function mandar(chat, texto) {
   try {
-    const j = telegram('sendMessage', { chat_id: chat, text: texto, parse_mode: 'HTML', disable_web_page_preview: true });
+    let j = telegram('sendMessage', { chat_id: chat, text: texto, parse_mode: 'HTML', disable_web_page_preview: true });
+    const novoId = j.parameters && j.parameters.migrate_to_chat_id;
+    if (!j.ok && novoId) {
+      // O grupo virou supergrupo e ganhou outro número: atualiza e tenta de novo.
+      const props = PropertiesService.getScriptProperties();
+      const chats = JSON.parse(props.getProperty('tgChats') || '{}');
+      Object.keys(chats).forEach(function (k) { if (chats[k] === chat) chats[k] = novoId; });
+      props.setProperty('tgChats', JSON.stringify(chats));
+      j = telegram('sendMessage', { chat_id: novoId, text: texto, parse_mode: 'HTML', disable_web_page_preview: true });
+    }
     return { enviado: !!j.ok, resposta: j.ok ? '' : (j.description || 'erro') };
   } catch (e) {
     return { enviado: false, resposta: String((e && e.message) || e) };
@@ -278,6 +322,11 @@ function testeAviso(p) {
   if (!temToken()) return { ok: true, enviado: false, resposta: 'Falta colocar o token do robô em TELEGRAM_TOKEN.' };
   let chats = {};
   try { chats = lerTelegram(); } catch (e) { return { ok: true, enviado: false, resposta: String(e.message || e) }; }
+  if (p.id === '_grupo') {
+    if (!chats._grupo) return { ok: true, enviado: false, resposta: 'O robô ainda não foi colocado no grupo.' };
+    const rg = mandar(chats._grupo, '🐼 Oi, casal! Os avisos do calendário do Meu Controle estão funcionando neste grupo. ✅');
+    return { ok: true, enviado: rg.enviado, resposta: rg.resposta };
+  }
   if (!chats[p.id]) return { ok: true, enviado: false, resposta: 'Essa pessoa ainda não tocou em "Iniciar" no robô.' };
   const r = mandar(chats[p.id], '🐼 Oi, ' + html(String(p.nome || '').split(' ')[0]) + '! Os avisos do calendário do Meu Controle estão funcionando. ✅');
   return { ok: true, enviado: r.enviado, resposta: r.resposta };

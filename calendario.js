@@ -134,18 +134,23 @@ function cartaoPessoas(e) {
       <span class="acoes">${App.modo === 'nuvem' ? `<button class="link" data-a="calTg">🔄 Atualizar</button>` : ''}<button class="link" data-a="calPessoa">+ Pessoa</button></span></div>
     ${tg.semToken ? `<p class="tri-aviso" style="margin:0 0 10px">Falta criar o robô do Telegram e colocar o código dele na ponte do Google (veja o CONFIGURAR.md).</p>` : ''}
     ${tg.erro ? `<p class="tri-aviso forte" style="margin:0 0 10px">⚠️ ${esc(tg.erro)}</p>` : ''}
+    ${tg.bot ? `<div class="cal-pessoa cal-grupo"><span class="cal-txt"><strong>👥 Grupo do casal</strong>
+        <small>${tg.grupo ? '✈️ Conectado: todos os avisos vão para o grupo' : 'Crie um grupo no Telegram com vocês dois e coloque o robô nele'}</small></span>
+        <span class="acoes">${tg.grupo ? `<button class="btn mini" data-a="calTeste" data-v="_grupo">Enviar teste</button>`
+          : `<a class="btn mini pri" href="https://t.me/${tg.bot}?startgroup=grupo" target="_blank" rel="noopener">Conectar grupo</a>`}</span></div>` : ''}
     ${pessoas().map(p => {
       const ligado = tg.ligados.includes(p.id);
       return `<div class="cal-pessoa"><span class="cal-txt" data-a="calPessoa" data-v="${esc(p.id)}" role="button" tabindex="0">
         <strong>${esc(p.nome)}${e && e.id === p.id ? ' <small class="muted">(você)</small>' : ''}</strong>
         <small>${App.modo !== 'nuvem' ? '' : tg.carregando && !tg.carregado ? 'Conferindo o Telegram…' : ligado ? '✈️ Telegram conectado' : '🔕 Telegram não conectado'}${p.email ? ' · ' + esc(p.email) : ''}</small></span>
         <span class="acoes">${ligado ? `<button class="btn mini" data-a="calTeste" data-v="${esc(p.id)}">Enviar teste</button>`
-          : link(p) ? `<a class="btn mini pri" href="${link(p)}" target="_blank" rel="noopener">Conectar</a><button class="btn mini" data-a="calCopiarTg" data-v="${esc(p.id)}">Copiar link</button>` : ''}</span></div>`;
+          : link(p) && !tg.grupo ? `<a class="btn mini pri" href="${link(p)}" target="_blank" rel="noopener">Conectar</a><button class="btn mini" data-a="calCopiarTg" data-v="${esc(p.id)}">Copiar link</button>` : ''}</span></div>`;
     }).join('')}
-    ${tg.bot ? `<details class="cal-ajuda" style="margin-top:10px"><summary>Como conectar o Telegram (1 vez por pessoa)</summary>
-      <ol><li>No celular <b>da pessoa</b>, toque em <b>Conectar</b> (ou mande para ela o link do <b>Copiar link</b>).</li>
-        <li>O Telegram abre o robô <b>@${esc(tg.bot)}</b>: toque em <b>Iniciar</b>.</li>
-        <li>O robô responde "Avisos ligados". Volte aqui e toque em <b>🔄 Atualizar</b>.</li></ol></details>` : ''}
+    ${tg.bot && !tg.grupo ? `<details class="cal-ajuda" style="margin-top:10px"><summary>Como conectar o grupo</summary>
+      <ol><li>No Telegram, crie um grupo com vocês dois (ex.: "Nós dois 🐼").</li>
+        <li>Aqui no app, toque em <b>Conectar grupo</b>. O Telegram abre e pergunta em qual grupo pôr o robô <b>@${esc(tg.bot)}</b>: escolha o grupo de vocês.</li>
+        <li>O robô dá "Oi, casal!" no grupo. Volte aqui e toque em <b>🔄 Atualizar</b>.</li></ol>
+      <p class="muted small">Prefere cada um no privado? Toque em <b>Conectar</b> ao lado do nome, no celular de cada um.</p></details>` : ''}
     ${!App.usuario?.email && e ? `<p class="muted small" style="margin:10px 0 0">Neste aparelho você é <b>${esc(e.nome)}</b>. <button class="link" data-a="calSouEu" data-v="">Trocar</button></p>` : ''}
   </div>`;
 }
@@ -213,14 +218,14 @@ function modalPessoa(p) {
 let envioAvisos = null, ultimoEnvio = '';
 try { ultimoEnvio = localStorage.getItem('apg-avisos-env') || ''; } catch (e) { /* sem armazenamento */ }
 const estadoAvisos = { msg: '', erro: false };
-const estadoTg = { bot: '', ligados: [], semToken: false, carregado: false, carregando: false, erro: '' };
+const estadoTg = { bot: '', ligados: [], grupo: false, semToken: false, carregado: false, carregando: false, erro: '' };
 
 // Pergunta à ponte qual é o robô e quem já tocou em "Iniciar" nele.
 async function carregarTg() {
   estadoTg.carregando = true;
   try {
     const j = await chamarPonte({ acao: 'telegram' });
-    Object.assign(estadoTg, { bot: j.bot || '', ligados: j.ligados || [], semToken: !!j.semToken, erro: j.erroTelegram || '' });
+    Object.assign(estadoTg, { bot: j.bot || '', ligados: j.ligados || [], grupo: !!j.grupo, semToken: !!j.semToken, erro: j.erroTelegram || '' });
   } catch (e) {
     estadoTg.erro = /fetch|network|load failed|abort/i.test(e.message) ? 'Sem conexão com a ponte do Google.' : e.message;
   }
@@ -298,7 +303,7 @@ const acoesCalendario = {
     catch (e) { prompt('Copie o link:', link); }
   },
   calTeste: async v => {
-    const p = pessoa(v); if (!p) return;
+    const p = v === '_grupo' ? { id: '_grupo', nome: 'o grupo' } : pessoa(v); if (!p) return;
     if (App.modo !== 'nuvem') return alert('O teste precisa de login (modo nuvem).');
     try {
       const j = await chamarPonte({ acao: 'teste', pessoa: { id: p.id, nome: p.nome } });
