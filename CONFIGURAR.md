@@ -64,20 +64,25 @@ Sempre que o arquivo [`firestore.rules`](firestore.rules) mudar, cole a versão 
 - Novembro/2026: entraram as regras `tarefas` e `pessoas` (calendário). Sem elas, o calendário
   fica salvo só no aparelho onde foi usado.
 
-## Avisos de WhatsApp do calendário
+## Avisos no Telegram do calendário
 
-Os avisos saem pela mesma ponte do Google (Apps Script) da planilha de cidades, usando o
-**CallMeBot** (gratuito e não oficial).
+Os avisos saem pela mesma ponte do Google (Apps Script) da planilha de cidades, por um robô do
+Telegram que é só seu (gratuito e oficial).
 
-1. **Atualizar a ponte:** abra o projeto do Apps Script, apague o código e cole o de
-   [`apps-script/Codigo.gs`](apps-script/Codigo.gs). Lembre de preencher de novo `EMAILS_PERMITIDOS`
-   com os e-mails de vocês dois. Salve.
-2. **Publicar a versão nova** (o endereço continua o mesmo): **Implantar → Gerenciar implantações →
+1. **Criar o robô:** no Telegram, procure **@BotFather** (tem o selo azul), toque em **Iniciar** e mande
+   `/newbot`. Ele pede um nome (ex.: *Meu Controle*) e depois um usuário que termine em `bot`
+   (ex.: *meucontrole_gustavo_bot*). No fim ele manda um **token** (algo como `123456789:AAH…`).
+   Esse token é senha: não mande para ninguém.
+2. **Atualizar a ponte:** abra o projeto do Apps Script, apague o código e cole o de
+   [`apps-script/Codigo.gs`](apps-script/Codigo.gs). Preencha `EMAILS_PERMITIDOS` com os e-mails de vocês
+   dois e cole o token em `TELEGRAM_TOKEN` (entre as aspas). Salve.
+3. **Publicar a versão nova** (o endereço continua o mesmo): **Implantar → Gerenciar implantações →
    lápis (editar) → Versão: Nova versão → Implantar**.
-3. **Ligar o relógio dos avisos:** no editor, no menu de funções lá em cima, escolha **instalarAvisos**
-   e clique em **Executar**. Aceite as permissões. Só precisa fazer uma vez.
-4. **Cada pessoa ativa o próprio WhatsApp:** no app, **Agenda → Pessoas e WhatsApp**, toque no nome e
-   siga "Como ativar o aviso no WhatsApp". Depois toque em **Enviar teste**.
+4. **Ligar o relógio dos avisos:** no editor, escolha a função **instalarAvisos** e clique em **Executar**.
+   Aceite as permissões. Só precisa fazer uma vez (se já fez antes, não precisa repetir).
+5. **Cada pessoa conecta o próprio Telegram:** no app, **Agenda → Pessoas e Telegram → Conectar**
+   (ou **Copiar link** e mandar para a outra pessoa). No Telegram, toque em **Iniciar**. Volte ao app,
+   toque em **🔄 Atualizar** e depois em **Enviar teste**.
 
-Como funciona: quando alguém cria uma tarefa para o outro, chega um WhatsApp na hora. Enquanto a
+Como funciona: quando alguém cria uma tarefa para o outro, chega uma mensagem na hora. Enquanto a
 pessoa não tocar em **👀 Vi**, todo dia às 8h chega um resumo com o que falta ver (e o que é para hoje).

@@ -1,7 +1,7 @@
 /**
  * Meu Controle — ponte entre o app e o Google:
  *   - planilha "Cidades_SC_visitadas" (aba Cidades);
- *   - avisos de WhatsApp das tarefas do calendário (pelo CallMeBot).
+ *   - avisos no Telegram das tarefas do calendário (robô próprio, criado no @BotFather).
  *
  * Como instalar (passo a passo no CONFIGURAR.md):
  *   1. Na planilha: Extensões → Apps Script (ou crie um projeto novo em https://script.google.com).
@@ -10,7 +10,8 @@
  *   3. Implantar → Nova implantação → App da Web
  *        Executar como: Eu  ·  Quem pode acessar: Qualquer pessoa
  *   4. Autorize e copie o endereço que termina em /exec.
- *   5. Avisos do calendário: no editor, escolha a função "instalarAvisos" e clique em Executar (1 vez só).
+ *   5. Telegram: crie o robô no @BotFather e cole o código (token) dele em TELEGRAM_TOKEN, aqui embaixo.
+ *   6. Avisos do calendário: no editor, escolha a função "instalarAvisos" e clique em Executar (1 vez só).
  *      Ela cria o relógio que manda o resumo diário às 8h e reenvia avisos que falharam.
  *   Ao trocar o código: Implantar → Gerenciar implantações → lápis → Versão: "Nova versão" → Implantar
  *   (assim o endereço /exec continua o mesmo).
@@ -24,6 +25,8 @@
 const FIREBASE_API_KEY = 'AIzaSyCxPbRVCEDeH0dod1imsw5QLFJfKVw7Nis';
 // Quem pode ler e gravar (em minúsculas).
 const EMAILS_PERMITIDOS = ['seu-email@gmail.com'];
+// Código (token) do robô do Telegram, que o @BotFather manda ao criar o robô. É senha: não mostre a ninguém.
+const TELEGRAM_TOKEN = 'COLE_AQUI_O_TOKEN_DO_BOTFATHER';
 const ABA = 'Cidades';
 // A planilha é aberta pelo ID: funciona tanto colado dentro da planilha quanto num projeto novo em script.google.com.
 const PLANILHA_ID = '1pkkeJRWrSxaPUr93GzzqH0mPm-cBv3GuuGqb31PE5Y8';
@@ -39,7 +42,8 @@ function doPost(e) {
     const login = conferirLogin(pedido.token);
     if (!login.ok) return resposta({ ok: false, erro: 'nao-autorizado', motivo: login.motivo });
     if (pedido.acao === 'tarefas') return resposta(receberTarefas(pedido));
-    if (pedido.acao === 'testeWhats') return resposta(testeWhats(pedido.pessoa || {}));
+    if (pedido.acao === 'telegram') return resposta(estadoTelegram());
+    if (pedido.acao === 'teste') return resposta(testeAviso(pedido.pessoa || {}));
     if (pedido.acao && ['ler', 'salvar'].indexOf(pedido.acao) < 0) return resposta({ ok: false, erro: 'acao-desconhecida' });
     const aba = SpreadsheetApp.openById(PLANILHA_ID).getSheetByName(ABA);
     if (!aba) return resposta({ ok: false, erro: 'aba-nao-encontrada' });
@@ -116,16 +120,69 @@ function testarChave() {
 
 
 /* =========================================================
-   Avisos de WhatsApp das tarefas do calendário
-   O app manda as tarefas abertas (e as pessoas, com WhatsApp e chave do CallMeBot) sempre que
-   algo muda. A ponte guarda isso e:
+   Avisos no Telegram das tarefas do calendário
+   O app manda as tarefas abertas (e as pessoas) sempre que algo muda. A ponte guarda isso e:
      - na hora: avisa cada pessoa de uma tarefa que ela ainda não viu (uma vez por tarefa);
      - todo dia às 8h (relógio criado por instalarAvisos): manda um resumo por pessoa com o que
        ela ainda não viu e o que é para hoje.
-   Nada disso grava no Firebase: o que já foi avisado fica nas Propriedades do script.
+   Cada pessoa liga o Telegram tocando em "Conectar" no app: abre o robô com /start <id da pessoa>.
+   A ponte lê essas mensagens (getUpdates) e guarda o chat de cada pessoa nas Propriedades do script.
+   Nada disso grava no Firebase.
    ========================================================= */
 const FUSO = 'America/Sao_Paulo';
 const HORA_RESUMO = 8;
+
+function temToken() { return TELEGRAM_TOKEN && TELEGRAM_TOKEN.indexOf('COLE_AQUI') < 0; }
+
+function telegram(metodo, dados) {
+  const r = UrlFetchApp.fetch('https://api.telegram.org/bot' + TELEGRAM_TOKEN + '/' + metodo, {
+    method: 'post', contentType: 'application/json', payload: JSON.stringify(dados || {}), muteHttpExceptions: true,
+  });
+  let j = {}; try { j = JSON.parse(r.getContentText()); } catch (e) { j = { ok: false, description: r.getContentText().slice(0, 140) }; }
+  return j;
+}
+
+// Lê quem tocou em "Iniciar" no robô e guarda o chat de cada pessoa.
+function lerTelegram() {
+  if (!temToken()) return {};
+  const props = PropertiesService.getScriptProperties();
+  const chats = JSON.parse(props.getProperty('tgChats') || '{}');
+  const offset = Number(props.getProperty('tgOffset') || 0);
+  const j = telegram('getUpdates', { offset: offset, timeout: 0, allowed_updates: ['message'] });
+  if (!j.ok) throw new Error('Telegram: ' + (j.description || 'erro'));
+  let ultimo = offset - 1;
+  (j.result || []).forEach(function (u) {
+    ultimo = Math.max(ultimo, u.update_id);
+    const m = u.message; if (!m || !m.text || !m.chat) return;
+    const id = (m.text.match(/^\/start\s+(\S+)/) || [])[1];
+    if (id) {
+      chats[id] = m.chat.id;
+      telegram('sendMessage', { chat_id: m.chat.id, text: '🐼 Pronto! Os avisos do calendário do Meu Controle vão chegar aqui. Pode voltar para o app e tocar em 🔄 Atualizar.' });
+    } else if (/^\/start/.test(m.text)) {
+      telegram('sendMessage', { chat_id: m.chat.id, text: 'Para ligar os avisos, abra o app → Agenda → Pessoas e Telegram → Conectar.' });
+    }
+  });
+  props.setProperty('tgChats', JSON.stringify(chats));
+  if (ultimo >= offset) props.setProperty('tgOffset', String(ultimo + 1));
+  return chats;
+}
+
+function estadoTelegram() {
+  if (!temToken()) return { ok: true, semToken: true, ligados: [] };
+  try {
+    const props = PropertiesService.getScriptProperties();
+    let bot = props.getProperty('tgBot');
+    if (!bot) {
+      const me = telegram('getMe');
+      if (!me.ok) return { ok: true, ligados: [], erroTelegram: 'O Telegram recusou o token do robô (' + (me.description || 'erro') + '). Confira TELEGRAM_TOKEN.' };
+      bot = me.result.username; props.setProperty('tgBot', bot);
+    }
+    const chats = lerTelegram();
+    return { ok: true, bot: bot, ligados: Object.keys(chats) };
+  } catch (e) {
+    return { ok: true, ligados: [], erroTelegram: String((e && e.message) || e) };
+  }
+}
 
 function receberTarefas(pedido) {
   const trava = LockService.getScriptLock();
@@ -142,9 +199,13 @@ function receberTarefas(pedido) {
   } finally { trava.releaseLock(); }
 }
 
+const html = function (s) { return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); };
+
 // Avisa cada pessoa das tarefas que ela ainda não viu e que ainda não foram avisadas.
 // Tarefa alterada (dia/hora/texto) conta como nova.
 function avisarNovas(dados) {
+  let chats = {};
+  try { chats = lerTelegram(); } catch (e) { return { enviados: 0, falhas: [String(e.message || e)] }; }
   const props = PropertiesService.getScriptProperties();
   const avisados = JSON.parse(props.getProperty('avisados') || '{}');
   const pessoas = {}; dados.pessoas.forEach(function (p) { pessoas[p.id] = p; });
@@ -154,14 +215,13 @@ function avisarNovas(dados) {
       const chave = t.id + '|' + pid + '|' + (t.alterada || '');
       if ((t.vistos || []).indexOf(pid) >= 0) return;
       if (avisados[chave]) { novo[chave] = avisados[chave]; return; }
-      const p = pessoas[pid];
-      if (!p || !p.whats || !p.chave) return;
+      if (!chats[pid]) return;
       const autor = pessoas[t.por] ? pessoas[t.por].nome.split(' ')[0] : '';
-      const texto = '🐼 *Nova tarefa' + (autor ? ' de ' + autor : '') + '*\n' + t.titulo + '\n📅 ' + quando(t) +
-        '\n\nAbra o app e toque em "👀 Vi" para parar os avisos.' + (dados.site ? '\n' + dados.site : '');
-      const r = mandarWhats(p, texto);
+      const texto = '🐼 <b>Nova tarefa' + (autor ? ' de ' + html(autor) : '') + '</b>\n' + html(t.titulo) + '\n📅 ' + quando(t) +
+        '\n\nAbra o app e toque em "👀 Vi" para parar os avisos.' + (dados.site ? '\n' + html(dados.site) : '');
+      const r = mandar(chats[pid], texto);
       if (r.enviado) { novo[chave] = new Date().toISOString(); enviados++; }
-      else falhas.push(p.nome + ': ' + r.resposta);
+      else falhas.push((pessoas[pid] ? pessoas[pid].nome : pid) + ': ' + r.resposta);
     });
   });
   props.setProperty('avisados', JSON.stringify(novo));   // só guarda o que ainda existe
@@ -171,27 +231,29 @@ function avisarNovas(dados) {
 // Relógio de hora em hora (criado por instalarAvisos): reenvia o que falhou e manda o resumo das 8h.
 function avisosDeHora() {
   const dados = lerGrande('tarefas');
-  if (!dados) return;
+  if (!dados || !temToken()) return;
   const trava = LockService.getScriptLock();
   trava.waitLock(20000);
   try {
     avisarNovas(dados);
+    const chats = JSON.parse(PropertiesService.getScriptProperties().getProperty('tgChats') || '{}');
     const props = PropertiesService.getScriptProperties();
     const hojeTxt = Utilities.formatDate(new Date(), FUSO, 'yyyy-MM-dd');
     const hora = Number(Utilities.formatDate(new Date(), FUSO, 'H'));
     if (hora < HORA_RESUMO || hora >= 22 || props.getProperty('resumoEm') === hojeTxt) return;
     dados.pessoas.forEach(function (p) {
-      if (!p.whats || !p.chave) return;
+      if (!chats[p.id]) return;
       const minhas = dados.tarefas.filter(function (t) { return (t.para || []).indexOf(p.id) >= 0; });
       const naoViu = minhas.filter(function (t) { return (t.vistos || []).indexOf(p.id) < 0; });
       const hoje = minhas.filter(function (t) { return t.data && t.data <= hojeTxt && naoViu.indexOf(t) < 0; });
       if (!naoViu.length && !hoje.length) return;
-      let texto = '🐼 *Bom dia, ' + p.nome.split(' ')[0] + '!*';
-      if (naoViu.length) texto += '\n\n👀 *Ainda não vistas:*\n' + naoViu.map(function (t) { return '• ' + t.titulo + ' (' + quando(t) + ')'; }).join('\n');
-      if (hoje.length) texto += '\n\n📌 *Para hoje / atrasadas:*\n' + hoje.map(function (t) { return '• ' + t.titulo + ' (' + quando(t) + ')'; }).join('\n');
+      const item = function (t) { return '• ' + html(t.titulo) + ' (' + quando(t) + ')'; };
+      let texto = '🐼 <b>Bom dia, ' + html(p.nome.split(' ')[0]) + '!</b>';
+      if (naoViu.length) texto += '\n\n👀 <b>Ainda não vistas:</b>\n' + naoViu.map(item).join('\n');
+      if (hoje.length) texto += '\n\n📌 <b>Para hoje / atrasadas:</b>\n' + hoje.map(item).join('\n');
       if (naoViu.length) texto += '\n\nToque em "👀 Vi" no app para parar os avisos.';
-      if (dados.site) texto += '\n' + dados.site;
-      mandarWhats(p, texto);
+      if (dados.site) texto += '\n' + html(dados.site);
+      mandar(chats[p.id], texto);
     });
     props.setProperty('resumoEm', hojeTxt);
   } finally { trava.releaseLock(); }
@@ -203,22 +265,21 @@ function quando(t) {
   return p[2] + '/' + p[1] + '/' + p[0] + (t.hora ? ' às ' + t.hora : '');
 }
 
-function mandarWhats(p, texto) {
+function mandar(chat, texto) {
   try {
-    const url = 'https://api.callmebot.com/whatsapp.php?phone=' + encodeURIComponent(String(p.whats).replace(/\D/g, '')) +
-      '&text=' + encodeURIComponent(texto) + '&apikey=' + encodeURIComponent(p.chave);
-    const r = UrlFetchApp.fetch(url, { muteHttpExceptions: true });
-    const corpo = r.getContentText().replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
-    const ok = r.getResponseCode() === 200 && !/error|invalid|not allowed|paused/i.test(corpo);
-    return { enviado: ok, resposta: ok ? '' : (r.getResponseCode() + ' ' + corpo.slice(0, 140)) };
+    const j = telegram('sendMessage', { chat_id: chat, text: texto, parse_mode: 'HTML', disable_web_page_preview: true });
+    return { enviado: !!j.ok, resposta: j.ok ? '' : (j.description || 'erro') };
   } catch (e) {
     return { enviado: false, resposta: String((e && e.message) || e) };
   }
 }
 
-function testeWhats(p) {
-  if (!p.whats || !p.chave) return { ok: true, enviado: false, resposta: 'Falta o WhatsApp ou a chave.' };
-  const r = mandarWhats(p, '🐼 Oi, ' + String(p.nome || '').split(' ')[0] + '! Os avisos do calendário do Meu Controle estão funcionando. ✅');
+function testeAviso(p) {
+  if (!temToken()) return { ok: true, enviado: false, resposta: 'Falta colocar o token do robô em TELEGRAM_TOKEN.' };
+  let chats = {};
+  try { chats = lerTelegram(); } catch (e) { return { ok: true, enviado: false, resposta: String(e.message || e) }; }
+  if (!chats[p.id]) return { ok: true, enviado: false, resposta: 'Essa pessoa ainda não tocou em "Iniciar" no robô.' };
+  const r = mandar(chats[p.id], '🐼 Oi, ' + html(String(p.nome || '').split(' ')[0]) + '! Os avisos do calendário do Meu Controle estão funcionando. ✅');
   return { ok: true, enviado: r.enviado, resposta: r.resposta };
 }
 
@@ -247,4 +308,11 @@ function instalarAvisos() {
   ScriptApp.getProjectTriggers().forEach(function (g) { if (g.getHandlerFunction() === 'avisosDeHora') ScriptApp.deleteTrigger(g); });
   ScriptApp.newTrigger('avisosDeHora').timeBased().everyHours(1).create();
   Logger.log('Pronto: o relógio dos avisos foi criado (roda de hora em hora; resumo às ' + HORA_RESUMO + 'h).');
+}
+
+// Diagnóstico do Telegram: escolha "testarTelegram" e clique em Executar; o resultado aparece no registro.
+function testarTelegram() {
+  if (!temToken()) { Logger.log('Falta colar o token do @BotFather em TELEGRAM_TOKEN.'); return; }
+  PropertiesService.getScriptProperties().deleteProperty('tgBot');
+  Logger.log(JSON.stringify(estadoTelegram()));
 }

@@ -698,11 +698,11 @@ async function modoNuvem(navegador, url, erros) {
   await ctx.close();
 }
 
-// Calendário de tarefas: pessoas, tarefa nova, "Vi", concluir e envio para a ponte do WhatsApp (simulada).
+// Calendário de tarefas: pessoas, tarefa nova, "Vi", concluir e envio para a ponte do Telegram (simulada).
 async function calendarioTarefas(navegador, url, erros) {
-  console.log('Calendário de tarefas (ponte do WhatsApp simulada)');
+  console.log('Calendário de tarefas (ponte do Telegram simulada)');
   const PONTE = 'https://script.google.com/macros/s/TESTE/exec';
-  const pedidos = [];
+  const pedidos = []; let ligados = [];
   const ctx = await navegador.newContext();
   await ctx.route('**/firebase-config.js', r => r.fulfill({ contentType: 'text/javascript', body: 'window.FIREBASE_CONFIG = { apiKey: "teste" };' }));
   await ctx.route('**/planilha-config.js', r => r.fulfill({ contentType: 'text/javascript', body: `window.PLANILHA_CIDADES = { url: '${PONTE}', id: 'abc' };` }));
@@ -710,7 +710,7 @@ async function calendarioTarefas(navegador, url, erros) {
     contentType: 'text/javascript', headers: { 'access-control-allow-origin': '*' }, body: FIREBASE_FALSO[r.request().url().split('/').pop()] }));
   await ctx.route(PONTE, r => {
     const pedido = JSON.parse(r.request().postData()); pedidos.push(pedido);
-    const corpo = pedido.acao === 'testeWhats' ? { ok: true, enviado: true } : pedido.acao === 'tarefas' ? { ok: true, enviados: 1, falhas: [] } : { ok: true, cidades: [] };
+    const corpo = pedido.acao === 'teste' ? { ok: true, enviado: true } : pedido.acao === 'telegram' ? { ok: true, bot: 'MeuControleBot', ligados } : pedido.acao === 'tarefas' ? { ok: true, enviados: 1, falhas: [] } : { ok: true, cidades: [] };
     r.fulfill({ contentType: 'application/json', headers: { 'access-control-allow-origin': '*' }, body: JSON.stringify(corpo) });
   });
   const p = await ctx.newPage();
@@ -723,19 +723,24 @@ async function calendarioTarefas(navegador, url, erros) {
   await p.click('.nav >> text=Agenda');
   confere(await p.isVisible('text=Primeiro passo'), 'calendário pede para cadastrar as pessoas');
 
-  const novaPessoa = async (nome, whats, chave, email) => {
+  const novaPessoa = async (nome, email) => {
     await p.click('[data-a=calPessoa] >> nth=0');
     await p.fill('#modal [name=nome]', nome);
     if (email !== undefined) await p.fill('#modal [name=email]', email);
-    await p.fill('#modal [name=whats]', whats); await p.fill('#modal [name=chave]', chave);
     await p.click('#modal button.pri');
   };
-  await novaPessoa('Maria', '55 47 99999-0000', '111');
-  await novaPessoa('João', '5547988880000', '222', 'joao@teste.com');
+  await novaPessoa('Maria');
+  await novaPessoa('João', 'joao@teste.com');
   await p.waitForFunction(() => window.__store.pessoas.size === 2);
   const ids = await p.evaluate(() => Object.fromEntries([...window.__store.pessoas.values()].map(x => [x.nome, x.id])));
-  confere(await p.evaluate(() => [...window.__store.pessoas.values()].find(x => x.nome === 'Maria').email === 'ok@gmail.com' && [...window.__store.pessoas.values()].find(x => x.nome === 'Maria').whats === '5547999990000'),
-    'pessoa guarda e-mail do login e WhatsApp só com números');
+  confere(await p.evaluate(() => [...window.__store.pessoas.values()].find(x => x.nome === 'Maria').email === 'ok@gmail.com'),
+    'pessoa guarda o e-mail do login');
+  await p.waitForSelector('.cal-pessoa a[href*="t.me/MeuControleBot?start="]');
+  confere(await p.locator('.cal-pessoa a[href*="t.me/MeuControleBot?start="]').count() === 2, 'cada pessoa tem o link para conectar o Telegram');
+  ligados = Object.values(ids);
+  await p.click('[data-a=calTg]');
+  await p.waitForSelector('.cal-pessoa >> text=Telegram conectado');
+  confere(await p.locator('[data-a=calTeste]').count() === 2, 'depois de tocar em Iniciar no robô, aparece como conectado');
   confere(await p.isVisible('.cal-pessoa >> text=(você)'), 'o app reconhece quem está usando pelo e-mail');
 
   await p.click('.topo [data-a=calNova]');
@@ -747,8 +752,8 @@ async function calendarioTarefas(navegador, url, erros) {
   confere(t1.para.length === 2 && Object.keys(t1.vistos).length === 1 && t1.vistos[t1.criadoPor], 'tarefa nova vai para os dois; quem criou já conta como visto');
   for (let i = 0; i < 40 && !pedidos.some(x => x.acao === 'tarefas' && x.tarefas.length === 1); i++) await p.waitForTimeout(100);
   const env = pedidos.filter(x => x.acao === 'tarefas').pop();
-  confere(env && env.token === 'token-teste' && env.tarefas[0].vistos.length === 1 && env.pessoas.some(x => x.chave === '222'),
-    'tarefa vai para a ponte (que avisa no WhatsApp quem ainda não viu)');
+  confere(env && env.token === 'token-teste' && env.tarefas[0].vistos.length === 1 && env.pessoas.length === 2,
+    'tarefa vai para a ponte (que avisa no Telegram quem ainda não viu)');
   confere(await p.isVisible('.cal-dia.sel i'), 'o dia da tarefa ganha a marquinha no calendário');
 
   // Tarefa criada pelo João para a Maria: aparece "para você ver" até ela tocar em "Vi".
@@ -768,7 +773,7 @@ async function calendarioTarefas(navegador, url, erros) {
 
   await p.locator('[data-a=calTeste]').first().click();
   for (let i = 0; i < 30 && !alertas.some(a => a.includes('teste enviada')); i++) await p.waitForTimeout(100);
-  confere(pedidos.some(x => x.acao === 'testeWhats') && alertas.some(a => a.includes('teste enviada')), 'botão "Enviar teste" chama a ponte');
+  confere(pedidos.some(x => x.acao === 'teste') && alertas.some(a => a.includes('teste enviada')), 'botão "Enviar teste" chama a ponte');
   await ctx.close();
 }
 

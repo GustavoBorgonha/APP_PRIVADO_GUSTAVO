@@ -3,10 +3,9 @@
    Calendário de tarefas do casal.
    - db.tarefas (coleção "tarefas"): { id, titulo, data, hora, para: [pessoaId], obs,
      vistos: { pessoaId: quando }, feito, feitoEm, feitoPor, criadoPor, criadoEm }
-   - db.pessoas (coleção "pessoas"): { id, nome, email, whats, chave } — quem recebe tarefas e
-     o WhatsApp (CallMeBot) de cada um.
+   - db.pessoas (coleção "pessoas"): { id, nome, email } — quem recebe tarefas.
    Avisos: o app manda as tarefas abertas para a ponte do Apps Script (a mesma das Cidades),
-   que envia o WhatsApp na hora para quem ainda não viu e um resumo por dia às 8h enquanto
+   que manda mensagem no Telegram (robô próprio, criado no @BotFather) na hora para quem ainda não viu e um resumo por dia às 8h enquanto
    não for marcada como vista. A ponte é idempotente: qualquer aparelho pode reenviar.
    Carregado antes do app.js: só usa coisas dele quando as funções são chamadas.
    ========================================================= */
@@ -97,12 +96,12 @@ function vCalendario() {
     ? `<p class="tri-aviso forte" style="margin:0 0 16px">⚠️ O calendário está salvo só neste aparelho: ${(App.semNuvem.tarefas || App.semNuvem.pessoas) === 'regras' ? 'falta atualizar as regras do Firebase (veja o CONFIGURAR.md).' : 'não foi possível falar com a nuvem.'}</p>` : '';
   return `
     <div class="topo">
-      <div><h1>Calendário</h1><p class="sub" style="margin:0">Tarefas do casal, com aviso no WhatsApp até marcar como vista.</p></div>
+      <div><h1>Calendário</h1><p class="sub" style="margin:0">Tarefas do casal, com aviso no Telegram até marcar como vista.</p></div>
       <button class="btn pri" data-a="calNova" data-v="${ui.calDia}">+ Nova tarefa</button>
     </div>
     ${aviso}${statusAvisos()}
     ${semPessoas ? `<div class="card"><h2>Primeiro passo: quem usa o calendário</h2>
-      <p class="muted">Cadastre você e a Sara (nome, e-mail do login e WhatsApp). Assim dá para escolher para quem é cada tarefa.</p>
+      <p class="muted">Cadastre você e a Sara (nome e e-mail do login). Assim dá para escolher para quem é cada tarefa.</p>
       <button class="btn pri" data-a="calPessoa">+ Cadastrar pessoa</button></div>` : ''}
     ${!semPessoas && !e ? `<div class="card"><h2>Quem é você neste aparelho?</h2>
       <div class="acoes">${pessoas().map(p => `<button class="btn" data-a="calSouEu" data-v="${esc(p.id)}">${esc(p.nome)}</button>`).join('')}</div></div>` : ''}
@@ -124,14 +123,33 @@ function vCalendario() {
         ${proximas.length ? proximas.map(linhaTarefa).join('') : `<div class="vazio">${panda('preguica')}Nenhuma tarefa por fazer.</div>`}
       </div>
     </div>
-    ${semPessoas ? '' : `<div class="card"><div class="topo secao"><h2>Pessoas e WhatsApp</h2><button class="link" data-a="calPessoa">+ Pessoa</button></div>
-      ${pessoas().map(p => `<div class="cal-pessoa"><span class="cal-txt" data-a="calPessoa" data-v="${esc(p.id)}" role="button" tabindex="0">
-          <strong>${esc(p.nome)}${e && e.id === p.id ? ' <small class="muted">(você)</small>' : ''}</strong>
-          <small>${p.whats && p.chave ? '📱 WhatsApp ativo · +' + esc(p.whats) : '📵 Sem WhatsApp configurado'}${p.email ? ' · ' + esc(p.email) : ''}</small></span>
-          ${p.whats && p.chave ? `<button class="btn mini" data-a="calTeste" data-v="${esc(p.id)}">Enviar teste</button>` : ''}</div>`).join('')}
-      ${!App.usuario?.email && e ? `<p class="muted small" style="margin:10px 0 0">Neste aparelho você é <b>${esc(e.nome)}</b>. <button class="link" data-a="calSouEu" data-v="">Trocar</button></p>` : ''}
-    </div>`}`;
+    ${semPessoas ? '' : cartaoPessoas(e)}`;
 }
+
+// Pessoas e a ligação de cada uma com o robô do Telegram.
+function cartaoPessoas(e) {
+  if (App.modo === 'nuvem' && !estadoTg.carregado && !estadoTg.carregando) carregarTg();
+  const tg = estadoTg, link = p => tg.bot ? `https://t.me/${tg.bot}?start=${encodeURIComponent(p.id)}` : '';
+  return `<div class="card"><div class="topo secao"><h2>Pessoas e Telegram</h2>
+      <span class="acoes">${App.modo === 'nuvem' ? `<button class="link" data-a="calTg">🔄 Atualizar</button>` : ''}<button class="link" data-a="calPessoa">+ Pessoa</button></span></div>
+    ${tg.semToken ? `<p class="tri-aviso" style="margin:0 0 10px">Falta criar o robô do Telegram e colocar o código dele na ponte do Google (veja o CONFIGURAR.md).</p>` : ''}
+    ${tg.erro ? `<p class="tri-aviso forte" style="margin:0 0 10px">⚠️ ${esc(tg.erro)}</p>` : ''}
+    ${pessoas().map(p => {
+      const ligado = tg.ligados.includes(p.id);
+      return `<div class="cal-pessoa"><span class="cal-txt" data-a="calPessoa" data-v="${esc(p.id)}" role="button" tabindex="0">
+        <strong>${esc(p.nome)}${e && e.id === p.id ? ' <small class="muted">(você)</small>' : ''}</strong>
+        <small>${App.modo !== 'nuvem' ? '' : tg.carregando && !tg.carregado ? 'Conferindo o Telegram…' : ligado ? '✈️ Telegram conectado' : '🔕 Telegram não conectado'}${p.email ? ' · ' + esc(p.email) : ''}</small></span>
+        <span class="acoes">${ligado ? `<button class="btn mini" data-a="calTeste" data-v="${esc(p.id)}">Enviar teste</button>`
+          : link(p) ? `<a class="btn mini pri" href="${link(p)}" target="_blank" rel="noopener">Conectar</a><button class="btn mini" data-a="calCopiarTg" data-v="${esc(p.id)}">Copiar link</button>` : ''}</span></div>`;
+    }).join('')}
+    ${tg.bot ? `<details class="cal-ajuda" style="margin-top:10px"><summary>Como conectar o Telegram (1 vez por pessoa)</summary>
+      <ol><li>No celular <b>da pessoa</b>, toque em <b>Conectar</b> (ou mande para ela o link do <b>Copiar link</b>).</li>
+        <li>O Telegram abre o robô <b>@${esc(tg.bot)}</b>: toque em <b>Iniciar</b>.</li>
+        <li>O robô responde "Avisos ligados". Volte aqui e toque em <b>🔄 Atualizar</b>.</li></ol></details>` : ''}
+    ${!App.usuario?.email && e ? `<p class="muted small" style="margin:10px 0 0">Neste aparelho você é <b>${esc(e.nome)}</b>. <button class="link" data-a="calSouEu" data-v="">Trocar</button></p>` : ''}
+  </div>`;
+}
+
 
 /* ---------- janelas ---------- */
 function modalTarefa(t, dataInicial) {
@@ -173,30 +191,18 @@ function modalTarefa(t, dataInicial) {
 
 function modalPessoa(p) {
   const nova = !p;
-  p = p || { nome: '', email: nova && !(db.pessoas || []).length ? (App.usuario?.email || '') : '', whats: '', chave: '' };
+  p = p || { nome: '', email: nova && !(db.pessoas || []).length ? (App.usuario?.email || '') : '' };
   abrirModal(`
     <h2>${nova ? 'Nova pessoa' : 'Editar pessoa'}</h2>
     <form class="form" data-f="modal">
       <label class="full">Nome<input name="nome" required value="${esc(p.nome)}" placeholder="Ex.: Gustavo, Sara"></label>
       <label class="full">E-mail do login (Google)<input name="email" type="email" value="${esc(p.email || '')}" placeholder="para o app saber quem está usando"></label>
-      <label>WhatsApp (com DDI e DDD)<input name="whats" inputmode="tel" value="${esc(p.whats || '')}" placeholder="5547999998888"></label>
-      <label>Chave do CallMeBot<input name="chave" value="${esc(p.chave || '')}" placeholder="ex.: 123456" autocomplete="off"></label>
-      <details class="full cal-ajuda"><summary>Como ativar o aviso no WhatsApp (1 vez por pessoa)</summary>
-        <ol>
-          <li>Abra <b>callmebot.com</b> → "Free WhatsApp API" e veja o número do robô (ele muda de vez em quando).</li>
-          <li>Salve esse número nos contatos do celular <b>desta pessoa</b>.</li>
-          <li>Mande para ele, pelo WhatsApp, a mensagem: <b>I allow callmebot to send me messages</b></li>
-          <li>Ele responde com a sua <b>apikey</b> (um número). Coloque aqui em "Chave do CallMeBot".</li>
-          <li>Salve e toque em <b>Enviar teste</b>.</li>
-        </ol>
-        <p class="muted small">É um serviço gratuito e não oficial: às vezes atrasa ou fica fora do ar.</p></details>
       <div class="modal-acoes full">
         ${nova ? '' : `<button type="button" class="btn perigo" data-a="calExcluirPessoa" data-v="${esc(p.id)}" style="margin-right:auto">Excluir</button>`}
         <button type="button" class="btn" data-a="fecharModal">Cancelar</button><button class="btn pri">Salvar</button></div>
     </form>`, d => {
-    const dados = { nome: String(d.nome || '').trim(), email: String(d.email || '').trim().toLowerCase(), whats: String(d.whats || '').replace(/\D/g, ''), chave: String(d.chave || '').trim() };
+    const dados = { nome: String(d.nome || '').trim(), email: String(d.email || '').trim().toLowerCase() };
     if (!dados.nome) { alert('Coloque o nome.'); return false; }
-    if (dados.whats && dados.whats.length < 12) { alert('Coloque o WhatsApp com 55 + DDD + número. Ex.: 5547999998888'); return false; }
     db.pessoas = db.pessoas || [];
     if (nova) db.pessoas.push({ id: 'ps-' + uid(), ...dados });
     else Object.assign(p, dados);
@@ -207,11 +213,25 @@ function modalPessoa(p) {
 let envioAvisos = null, ultimoEnvio = '';
 try { ultimoEnvio = localStorage.getItem('apg-avisos-env') || ''; } catch (e) { /* sem armazenamento */ }
 const estadoAvisos = { msg: '', erro: false };
+const estadoTg = { bot: '', ligados: [], semToken: false, carregado: false, carregando: false, erro: '' };
+
+// Pergunta à ponte qual é o robô e quem já tocou em "Iniciar" nele.
+async function carregarTg() {
+  estadoTg.carregando = true;
+  try {
+    const j = await chamarPonte({ acao: 'telegram' });
+    Object.assign(estadoTg, { bot: j.bot || '', ligados: j.ligados || [], semToken: !!j.semToken, erro: j.erroTelegram || '' });
+  } catch (e) {
+    estadoTg.erro = /fetch|network|load failed|abort/i.test(e.message) ? 'Sem conexão com a ponte do Google.' : e.message;
+  }
+  estadoTg.carregando = false; estadoTg.carregado = true;
+  if (ui.aba === 'calendario') renderSeguro();
+}
 
 function pacoteAvisos() {
   const tarefas = (db.tarefas || []).filter(t => !t.feito && (t.para || []).length)
     .map(t => ({ id: t.id, titulo: t.titulo, data: t.data || '', hora: t.hora || '', para: t.para, vistos: Object.keys(t.vistos || {}), por: t.criadoPor || '', alterada: t.alterada || '' }));
-  const ps = (db.pessoas || []).map(p => ({ id: p.id, nome: p.nome, whats: p.whats || '', chave: p.chave || '' }));
+  const ps = (db.pessoas || []).map(p => ({ id: p.id, nome: p.nome }));
   return { tarefas, pessoas: ps };
 }
 // Chamado depois de cada salvar(): manda para a ponte se algo dos avisos mudou.
@@ -241,13 +261,13 @@ async function enviarAvisos(pac, assin) {
     estadoAvisos.msg = j.falhas && j.falhas.length ? 'Alguns avisos não saíram: ' + j.falhas.join('; ') : '';
   } catch (e) {
     estadoAvisos.erro = true;
-    estadoAvisos.msg = /fetch|network|load failed|abort/i.test(e.message) ? 'Sem conexão com a ponte do Google: os avisos de WhatsApp saem quando voltar.' : e.message;
+    estadoAvisos.msg = /fetch|network|load failed|abort/i.test(e.message) ? 'Sem conexão com a ponte do Google: os avisos do Telegram saem quando voltar.' : e.message;
     setTimeout(() => avisarTarefas(), 5 * 60 * 1000);   // tenta de novo daqui a pouco
   }
   if (ui.aba === 'calendario') renderSeguro();
 }
 function statusAvisos() {
-  if (App.modo !== 'nuvem') return `<p class="tri-aviso" style="margin:0 0 16px">Os avisos de WhatsApp só funcionam com login (modo nuvem).</p>`;
+  if (App.modo !== 'nuvem') return `<p class="tri-aviso" style="margin:0 0 16px">Os avisos do Telegram só funcionam com login (modo nuvem).</p>`;
   return estadoAvisos.msg ? `<p class="tri-aviso ${estadoAvisos.erro ? 'forte' : ''}" style="margin:0 0 16px">⚠️ ${esc(estadoAvisos.msg)}</p>` : '';
 }
 
@@ -270,12 +290,19 @@ const acoesCalendario = {
     fecharModal();
   },
   calSouEu: v => { try { if (v) localStorage.setItem('apg-eu', v); else localStorage.removeItem('apg-eu'); } catch (e) { /* sem armazenamento */ } },
+  calTg: () => { estadoTg.carregado = false; carregarTg(); },
+  calCopiarTg: async v => {
+    const p = pessoa(v); if (!p || !estadoTg.bot) return;
+    const link = `https://t.me/${estadoTg.bot}?start=${encodeURIComponent(p.id)}`;
+    try { await navigator.clipboard.writeText(link); alert(`Link copiado! Mande para ${p.nome} abrir no celular e tocar em "Iniciar".`); }
+    catch (e) { prompt('Copie o link:', link); }
+  },
   calTeste: async v => {
     const p = pessoa(v); if (!p) return;
     if (App.modo !== 'nuvem') return alert('O teste precisa de login (modo nuvem).');
     try {
-      const j = await chamarPonte({ acao: 'testeWhats', pessoa: { nome: p.nome, whats: p.whats, chave: p.chave } });
-      alert(j.enviado ? `Mensagem de teste enviada para ${p.nome}. Pode levar 1 ou 2 minutos para chegar.` : 'O CallMeBot recusou: ' + (j.resposta || 'sem detalhes'));
+      const j = await chamarPonte({ acao: 'teste', pessoa: { id: p.id, nome: p.nome } });
+      alert(j.enviado ? `Mensagem de teste enviada para ${p.nome} no Telegram.` : 'Não saiu: ' + (j.resposta || 'sem detalhes'));
     } catch (e) { alert('Não consegui enviar: ' + e.message); }
   },
 };

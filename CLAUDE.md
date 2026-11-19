@@ -96,12 +96,15 @@ PWA em JavaScript puro (sem framework, sem build) para finanças pessoais e plan
   caem para o aparelho se as regras recusarem (`App.semNuvem`).
 - `calendario.js` — **Calendário** (aba `calendario`, botão "Agenda" na navegação): `db.tarefas` (coleção `tarefas`:
   titulo, data, hora, para[pessoaId], vistos{pessoaId: quando}, feito, criadoPor, alterada) e `db.pessoas` (coleção `pessoas`:
-  nome, email do login, whats, chave do CallMeBot). `eu()` = pessoa pelo e-mail do login (ou `apg-eu` sem login).
+  nome, email do login). `eu()` = pessoa pelo e-mail do login (ou `apg-eu` sem login).
   Quem cria já conta como visto; "👀 Vi" (`calVi`) para os avisos. Aviso no Início (`avisoTarefas`).
-  `avisarTarefas()` (chamado em `salvar()`) manda as tarefas abertas + pessoas para a ponte do Apps Script
-  (`acao: 'tarefas'`; só quando muda, assinatura em `apg-avisos-env`). A ponte manda WhatsApp na hora para quem
-  não viu e, com o relógio `instalarAvisos`/`avisosDeHora`, um resumo às 8h; guarda o que já avisou nas Propriedades
-  do script (não grava no Firebase). Tarefa editada (texto/dia/hora) zera os vistos e conta como nova.
+  Avisos pelo **Telegram** (robô próprio do @BotFather; token só no Apps Script, `TELEGRAM_TOKEN`). Cada pessoa conecta
+  pelo link `t.me/<robô>?start=<pessoaId>` (botões Conectar/Copiar link); a ponte lê `/start` com `getUpdates` e guarda
+  o chat nas Propriedades do script (`tgChats`). `estadoTg`/`carregarTg` (acao `telegram`) mostram quem está conectado.
+  `avisarTarefas()` (chamado em `salvar()`) manda as tarefas abertas + pessoas para a ponte (`acao: 'tarefas'`; só quando
+  muda, assinatura em `apg-avisos-env`). A ponte avisa na hora quem não viu e, com o relógio `instalarAvisos`/`avisosDeHora`,
+  manda um resumo às 8h; não grava no Firebase. Tarefa editada (texto/dia/hora) zera os vistos e conta como nova.
+  O WhatsApp (CallMeBot) foi testado e removido: o robô não respondia.
 - `cidades.js` + `planilha-config.js` — tela "Cidades de SC" (aba interna `cidades`, entrada pelo cartão em
   Planos), espelho da planilha do Google "Cidades_SC_visitadas" (aba Cidades). A planilha é a fonte: o app
   fala com ela por uma ponte em Apps Script (`apps-script/Codigo.gs`, publicada como App da Web; a URL vai em
