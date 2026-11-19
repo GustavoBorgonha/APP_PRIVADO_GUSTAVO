@@ -153,6 +153,21 @@ async function modoLocal(navegador, url, erros) {
   await p.click('.nav >> text=Planos');
   confere(await p.isVisible('text=Nosso casamento'), 'dados continuam após recarregar a página');
 
+  // Colar plano pronto (texto JSON com custos, guardado, tarefas e lançamento futuro).
+  await p.click('[data-a=colarPlano]');
+  await p.fill('#modal textarea[name=texto]', '```json\n' + JSON.stringify({ plano: { tipo: 'viagem', nome: 'Viagem colada', dataAlvo: '2027-01-10',
+    itens: [{ desc: 'Hotel', previsto: 1200 }, { desc: 'Passagens', previsto: '800,50', pago: 100 }], aportes: [{ valor: 300, data: '2026-11-01', obs: 'Começo' }],
+    tarefas: ['Reservar hotel', { texto: 'Escolher datas', feito: true }], notas: 'Anotação colada' },
+    agendados: [{ desc: 'Sinal do hotel', valor: 250, inicio: '2026-12-01' }] }) + '\n```');
+  await p.click('#modal button.pri');
+  await p.waitForSelector('text=Viagem colada');
+  confere((await p.textContent('.grid .card:nth-child(1) .val')).includes('2.000,50') && (await p.textContent('.grid .card:nth-child(2) .val')).includes('300,00'),
+    'colar plano cria custos e dinheiro guardado');
+  confere(await p.locator('.tarefa').count() === 2 && await p.locator('.tarefa.feita').count() === 1 && (await p.inputValue('textarea[data-c=notas]')) === 'Anotação colada',
+    'colar plano traz tarefas e anotações');
+  confere(await p.evaluate(() => db.agendados.some(a => a.desc === 'Sinal do hotel' && a.valor === 250)),
+    'colar plano cria o lançamento futuro');
+
   await ctx.close();
 }
 

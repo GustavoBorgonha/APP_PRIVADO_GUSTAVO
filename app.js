@@ -723,7 +723,7 @@ function vPlanos() {
   return `
     ${avisoCidadesGlobal()}
     <div class="topo"><div><h1>Planos e metas</h1><p class="sub" style="margin:0">Viagens, passeios, casamento, casa, carro…</p></div>
-      <button class="btn pri" data-a="novoPlano">+ Novo plano</button></div>
+      <div class="acoes"><button class="btn" data-a="colarPlano">📋 Colar plano</button><button class="btn pri" data-a="novoPlano">+ Novo plano</button></div></div>
     <div class="planos" style="margin-bottom:14px">${cartaoCidades()}</div>
     ${db.planos.length ? `<div class="planos">${db.planos.map(cardPlano).join('')}</div>`
       : `<div class="card"><h2>Comece um plano</h2><p class="muted">Cada plano já vem com uma lista sugerida de custos e tarefas que você pode ajustar.</p>
@@ -1259,6 +1259,59 @@ function modalPlano(p, tipoInicial) {
   });
 }
 
+/* ---------- colar plano pronto ----------
+   Recebe um texto (JSON) com o plano inteiro — custos, dinheiro guardado, tarefas, anotações e,
+   se quiser, lançamentos futuros — e cria tudo de uma vez. Feito para colar um plano montado fora
+   do app (ex.: a partir de um contrato). Plano com o mesmo nome: pergunta se substitui. */
+function lerPlanoColado(texto) {
+  const t = String(texto || '').replace(/^\s*```[a-z]*\s*/i, '').replace(/```\s*$/, '').trim();
+  let j; try { j = JSON.parse(t); } catch (e) { throw new Error('Não consegui ler o texto. Copie e cole o bloco inteiro, do primeiro "{" até o último "}".'); }
+  const p = j && (j.plano || j);
+  if (!p || typeof p !== 'object' || !String(p.nome || '').trim()) throw new Error('O texto precisa ter pelo menos o nome do plano.');
+  const data = d => /^\d{4}-\d{2}-\d{2}$/.test(d || '') ? d : '';
+  const lista = x => Array.isArray(x) ? x : [];
+  const plano = {
+    tipo: TIPOS[p.tipo] ? p.tipo : 'outro', nome: String(p.nome).trim(), dataAlvo: data(p.dataAlvo), meta: Math.abs(parseValor(p.meta)) || '',
+    notas: String(p.notas || ''),
+    itens: lista(p.itens).filter(i => i && String(i.desc || '').trim())
+      .map(i => ({ id: uid(), desc: String(i.desc).trim(), previsto: Math.abs(parseValor(i.previsto)), pago: Math.abs(parseValor(i.pago)) })),
+    aportes: lista(p.aportes).filter(a => a && parseValor(a.valor))
+      .map(a => ({ id: uid(), valor: parseValor(a.valor), data: data(a.data) || hoje(), obs: String(a.obs || '') })),
+    tarefas: lista(p.tarefas).map(x => typeof x === 'string' ? { texto: x } : x || {}).filter(x => String(x.texto || '').trim())
+      .map(x => ({ id: uid(), texto: String(x.texto).trim(), feito: !!x.feito })),
+  };
+  const agendados = lista(j.agendados || p.agendados).filter(a => a && String(a.desc || '').trim() && parseValor(a.valor) && data(a.inicio))
+    .map(a => ({ id: 'ag-' + uid(), tipo: a.tipo === 'receita' ? 'receita' : 'despesa', desc: String(a.desc).trim(), categoria: String(a.categoria || 'Outros'),
+      valor: Math.abs(parseValor(a.valor)), inicio: a.inicio, repete: ['mensal', 'semanal', 'anual'].includes(a.repete) ? a.repete : 'nao',
+      ate: ['mensal', 'semanal', 'anual'].includes(a.repete) ? data(a.ate) : '', feitos: {}, criadoEm: hoje() }));
+  return { plano, agendados };
+}
+
+function modalColarPlano() {
+  abrirModal(`
+    <h2>Colar plano</h2>
+    <form class="form" data-f="modal">
+      <p class="muted small full" style="margin:0">Cole aqui o texto do plano (começa com <b>{</b> e termina com <b>}</b>). O app cria o plano com custos, dinheiro guardado, tarefas e anotações.</p>
+      <label class="full">Texto do plano<textarea name="texto" rows="10" required spellcheck="false" style="font-family:ui-monospace,monospace;font-size:13px" placeholder='{ "plano": { "nome": "...", ... } }'></textarea></label>
+      <div class="modal-acoes full"><button type="button" class="btn" data-a="fecharModal">Cancelar</button><button class="btn pri">Criar plano</button></div>
+    </form>`, d => {
+    let r; try { r = lerPlanoColado(d.texto); } catch (e) { alert(e.message); return false; }
+    const { plano: np, agendados } = r;
+    const igual = db.planos.find(x => x.nome.trim().toLowerCase() === np.nome.toLowerCase());
+    let alvo;
+    if (igual && confirm(`Já existe o plano "${igual.nome}". Substituir o conteúdo dele por este?\n\nOK = substituir · Cancelar = criar outro plano`)) {
+      Object.assign(igual, np); alvo = igual;
+    } else {
+      alvo = { id: uid(), criadoEm: hoje(), ...np }; db.planos.push(alvo);
+    }
+    if (agendados.length) { db.agendados = db.agendados || []; db.agendados.push(...agendados); }
+    ui.aba = 'planos'; ui.plano = alvo.id;
+    reagir('feliz', 'Plano colado! Tudo no lugar 🐼✨');
+    alert(`Plano "${alvo.nome}" pronto: ${alvo.itens.length} custo(s), ${alvo.aportes.length} valor(es) guardado(s), ${alvo.tarefas.length} tarefa(s)` +
+      (agendados.length ? ` e ${agendados.length} lançamento(s) futuro(s).` : '.'));
+  });
+}
+
 /* ---------- CSV ---------- */
 function csvCampo(v) { v = String(v ?? ''); return /[;"\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v; }
 function exportarCSV() {
@@ -1417,6 +1470,7 @@ ${usados.length === 1 ? 'O lançamento que usa' : `Os ${usados.length} lançamen
     ui.triagem = null;
   },
   novoPlano: v => modalPlano(null, v),
+  colarPlano: () => modalColarPlano(),
   abrirPlano: v => { ui.aba = 'planos'; ui.plano = v; },
   voltar: () => { ui.plano = null; },
   editarPlano: v => modalPlano(plano(v)),

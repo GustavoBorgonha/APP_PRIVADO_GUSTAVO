@@ -77,6 +77,9 @@ PWA em JavaScript puro (sem framework, sem build) para finanças pessoais e plan
   `outroLado()` liga "PIX ENVIADO" sem nome ao mesmo valor recebido em outra conta no mesmo dia.
   Saídas aparecem em vermelho (CSS em `.mov-val`), transferências entre contas em cinza. Não versionar extratos reais; os testes usam
   extratos de mentira.
+- Planos: "📋 Colar plano" (`modalColarPlano`/`lerPlanoColado`) cria um plano a partir de um texto JSON
+  (`{ plano: { tipo, nome, dataAlvo, meta, itens[{desc,previsto,pago}], aportes[{valor,data,obs}], tarefas[], notas }, agendados[] }`);
+  mesmo nome pergunta se substitui. Serve para montar planos fora do app e colar.
 - `revisao.js` — duas telas internas abertas por Finanças: **Revisar categoria** (`vRevisao`, aba `revisao`):
   período + categoria → cartões estilo triagem para trocar categoria/descrição e confirmar ou pular; sugere
   pelo histórico sem contar a própria categoria (`memoriaHistorico(filtro)`), com "Aplicar sugestões".
