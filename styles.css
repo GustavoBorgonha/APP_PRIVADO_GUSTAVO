@@ -1113,3 +1113,13 @@ a.btn { text-decoration: none; color: var(--text); display: inline-flex; align-i
 .cal-check { display: flex !important; flex-direction: row !important; align-items: flex-start; gap: 10px; font-size: 14px; }
 .cal-check input { width: 20px; height: 20px; margin-top: 1px; accent-color: var(--ink); flex: none; }
 .cal-sino { width: 20px; text-align: center; flex: none; margin-top: 1px; }
+
+/* ---------- modelos (ML) ---------- */
+.tri-ml { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin: 8px 0; padding: 8px 12px; border-radius: 14px; background: var(--acento-suave); font-size: 14px; }
+.tri-ml small { color: var(--muted); }
+.ml-tabela { font-size: 14px; }
+.ml-tabela th { white-space: normal; line-height: 1.2; }
+.ml-tabela td:first-child { white-space: normal; }
+.ml-tabela td.num { white-space: nowrap; }
+@media (max-width: 520px) { .ml-tabela { font-size: 12.5px; } .ml-tabela th, .ml-tabela td { padding-left: 4px; padding-right: 4px; } .ml-tabela .chip { display: none; } }
+.ml-uso td { font-weight: 700; }

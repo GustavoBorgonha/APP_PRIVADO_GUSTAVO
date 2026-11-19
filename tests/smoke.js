@@ -809,6 +809,53 @@ async function calendarioTarefas(navegador, url, erros) {
   await ctx.close();
 }
 
+// 🧠 Modelos de categoria: avaliação (validação cruzada) e sugestão na triagem para estabelecimento novo.
+async function modelosCategoria(navegador, url, erros) {
+  console.log('Modelos de categoria (aprendizado de máquina)');
+  const ctx = await navegador.newContext();
+  await ctx.route('**/firebase-config.js', r => r.fulfill({ contentType: 'text/javascript', body: 'window.FIREBASE_CONFIG = null;' }));
+  const p = await ctx.newPage();
+  p.on('pageerror', e => erros.push('modelos: ' + e.message));
+  p.on('dialog', d => d.accept());
+  await p.goto(url);
+  // Histórico de mentira: cada categoria tem uma palavra típica e nomes de lugares sempre diferentes.
+  await p.evaluate(() => {
+    const nomes = ['sol', 'lua', 'mar', 'rio', 'flor', 'pedra', 'vale', 'serra', 'praia', 'campo', 'bosque', 'monte', 'lago', 'ponte', 'vila', 'porto', 'ilha', 'norte', 'leste', 'oeste'];
+    const grupos = [['Alimentação', ['restaurante', 'lanchonete', 'padaria']], ['Transporte', ['posto', 'combustivel', 'estacionamento']],
+      ['Mercado', ['supermercado', 'atacadao', 'hortifruti']], ['Saúde', ['farmacia', 'drogaria', 'clinica']]];
+    const d = { versao: 1, lancamentos: [], planos: [], categorias: [], agendados: [], tarefas: [], pessoas: [] };
+    let n = 0;
+    grupos.forEach(([cat, palavras], g) => nomes.forEach((nome, k) => {
+      const palavra = palavras[k % palavras.length], outro = nomes[(k * 7 + g * 3) % nomes.length];
+      const txt = `${palavra} ${nome} ${outro}`.toUpperCase();
+      d.lancamentos.push({ id: 'h' + (n++), tipo: 'despesa', categoria: cat, valor: 10 + g * 40 + k, data: '2026-10-' + String(1 + (k % 28)).padStart(2, '0'),
+        desc: txt.toLowerCase().replace(/\b\w/g, c => c.toUpperCase()), bruto: 'Compra no debito: "' + txt + '"', banco: 'Inter', meio: 'debito' });
+    }));
+    localStorage.setItem('apg-dados-v1', JSON.stringify(d));
+  });
+  await p.reload();
+  await p.click('.nav >> text=Configurações');
+  confere(await p.isVisible('text=Modelos de categoria') && await p.isVisible('text=80 lançamentos com categoria'), 'Configurações mostra o cartão de modelos');
+  await p.click('[data-a=mlAvaliar]');
+  await p.waitForSelector('.ml-tabela', { timeout: 60000 });
+  const aval = await p.evaluate(() => ML.estado.aval);
+  const linha = m => aval.tabela.find(t => t.modelo === m);
+  confere(aval.tabela.length === 5 && aval.novos > 0, 'compara regra, logística e Random Forest em validação cruzada');
+  confere(linha('regra').novos === 0 && Math.max(linha('log').novos, linha('rf').novos) >= 0.6, `o modelo acerta estabelecimentos novos (logística ${Math.round(linha('log').novos * 100)}%, RF ${Math.round(linha('rf').novos * 100)}%)`);
+  confere(linha('regra+' + aval.escolhido).acerto >= linha('regra').acerto, 'regra + modelo acerta pelo menos tanto quanto só a regra');
+  // Triagem: um restaurante que nunca apareceu.
+  await p.evaluate(() => {
+    ui.triagem = { arquivo: 'teste.ofx', banco: 'Inter', meio: 'debito', titular: '', lote: 'L1', em: hoje(), meta: {}, itens: [
+      { id: 'n1', estado: 'pendente', tipo: 'despesa', bruto: 'Compra no debito: "RESTAURANTE ZEBRA AZUL"', desc: 'Restaurante Zebra Azul', categoria: 'Outros', valor: 18, data: '2026-11-10', avisos: [] }] };
+    ui.naTriagem = true; ui.aba = 'extratos'; render();
+  });
+  await p.waitForSelector('.tri-ml', { timeout: 20000 });
+  confere((await p.textContent('.tri-ml')).includes('Alimentação'), 'na triagem, o modelo sugere a categoria de um estabelecimento novo');
+  await p.click('.tri-ml [data-a=triUsarModelo]');
+  confere(await p.evaluate(() => ui.triagem.itens[0].categoria === 'Alimentação' && ui.triagem.itens[0].catManual), '"Usar" aplica a sugestão');
+  await ctx.close();
+}
+
 (async () => {
   await new Promise(ok => servidor.listen(0, '127.0.0.1', ok));
   const url = `http://127.0.0.1:${servidor.address().port}/`;
@@ -824,6 +871,7 @@ async function calendarioTarefas(navegador, url, erros) {
     await triagemEntreAparelhos(navegador, url, erros);
     await cidadesPlanilha(navegador, url, erros);
     await calendarioTarefas(navegador, url, erros);
+    await modelosCategoria(navegador, url, erros);
     if (erros.length) throw new Error('Erros de JavaScript na página:\n' + erros.join('\n'));
     console.log('\nTudo certo ✅');
   } catch (e) {

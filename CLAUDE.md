@@ -113,6 +113,16 @@ PWA em JavaScript puro (sem framework, sem build) para finanças pessoais e plan
   `proximaData`, `horarioTxt`. Exemplos prontos no formulário (remédio, plantas, trabalho).
   A ponte (relógio de 5 em 5 min, `lembrarNaHora`) lembra no começo de cada período e, sem "feito", no fim.
   Pessoas e Telegram ficam na aba Configurações (antiga "Dados"; `vDados`, `cartaoPessoas`).
+- `ml.js` — **🧠 Modelos de categoria** (aprendizado de máquina no navegador, sem bibliotecas; objeto `ML`).
+  Atributos esparsos (`ML.atributos`: palavras/pares do texto do banco e da descrição, tipo, operação, banco, meio,
+  titular, faixa de valor, valor exato, dia da semana/parte do mês). Modelos: regressão logística multinomial (SGD + L2)
+  e Random Forest (Gini sobre atributos binários, bootstrap). Linha de base = `memoriaHistorico` (regra atual).
+  `ML.avaliar()`: validação cruzada em 5 partes (como no TCC do Gustavo): acerto geral, em "estabelecimentos novos"
+  (a regra não sabe), top-3 e o limiar de confiança que mantém ≥ 80% de acerto; escolhe logística ou RF pelo acerto
+  em novos; salva em `apg-ml-aval`. `ML.sugerir(x)`: só quando a regra não sabe e a confiança passa do limiar; o
+  modelo final treina em segundo plano e refaz quando os lançamentos mudam. Usado na triagem (`dicaModelo`, botão
+  "Usar") e na triagem automática. Cartão `cartaoModelos()` em Configurações. Próximo passo combinado: previsão de
+  saldo (linha de base + faixa P10–P90; RF só com ~12 meses de dados).
 - `cidades.js` + `planilha-config.js` — tela "Cidades de SC" (aba interna `cidades`, entrada pelo cartão em
   Planos), espelho da planilha do Google "Cidades_SC_visitadas" (aba Cidades). A planilha é a fonte: o app
   fala com ela por uma ponte em Apps Script (`apps-script/Codigo.gs`, publicada como App da Web; a URL vai em

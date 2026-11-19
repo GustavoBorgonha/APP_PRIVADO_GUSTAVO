@@ -477,6 +477,7 @@ function cartaoTriagem(i) {
     ${i.forcar ? '<p class="tri-aviso forte">⚠️ Este movimento já foi importado antes. Confirmar vai lançar de novo.</p>' : ''}
     ${parecido(i) && !i.forcar ? `<p class="tri-aviso forte">⚠️ Este valor já está lançado: ${esc(descreveLanc(parecido(i)))}. Confira antes de confirmar.</p>` : ''}
     ${i.avisos.map(a => `<p class="tri-aviso">⚠️ ${esc(a)}</p>`).join('')}
+    ${dicaModelo(i)}
     <div class="tri-campos">
       <label class="larga">Descrição<input ${campo('desc')} value="${esc(i.desc)}"></label>
       <label>Categoria${seletorCat(campo('categoria'), 'tipo:' + i.tipo, i.categoria || 'Outros')}</label>
@@ -492,6 +493,16 @@ function cartaoTriagem(i) {
       <button class="btn pri" data-a="triConfirmar" data-v="${i.id}">✓ Confirmar</button>
     </div>
   </div>`;
+}
+
+// 🧠 Sugestão do modelo de categorias (ml.js) quando a regra do histórico não conhece o estabelecimento.
+const comContexto = i => ({ ...i, banco: i.banco || ui.triagem?.banco, meio: i.meio || ui.triagem?.meio, titular: i.titular || ui.triagem?.titular });
+function dicaModelo(i) {
+  if (i.catManual) return '';
+  const s = ML.sugerir(comContexto(i));
+  if (!s || s.categoria === i.categoria) return '';
+  return `<p class="tri-ml">🧠 O modelo sugere <b>${esc(s.categoria)}</b> <small>(${Math.round(s.p * 100)}% de confiança)</small>
+    <button class="btn mini" data-a="triUsarModelo" data-v="${i.id}" data-cat="${esc(s.categoria)}">Usar</button></p>`;
 }
 
 // Tipo de operação do movimento (Pix, débito, boleto…), guardado ou tirado do texto do banco.
@@ -576,7 +587,7 @@ function memoriaHistorico(filtro = () => true) {
 function planoTriagemAuto() {
   const sugerir = memoriaHistorico();
   return ui.triagem.itens.filter(i => i.estado === 'pendente').map(i => {
-    const s = sugerir(i) || {}, novo = {};
+    const s = sugerir(i) || ML.sugerir(comContexto(i)) || {}, novo = {};
     if (s.categoria && !i.catManual && s.categoria !== i.categoria) novo.categoria = s.categoria;
     if (s.desc && !i.descManual && s.desc !== i.desc) novo.desc = s.desc;
     const avisos = (i.avisos || []).join(' '), teste = { ...i, ...novo };
@@ -871,6 +882,7 @@ function vDados() {
         <button class="btn" data-a="sair">Sair</button></div>`
       : `<p class="sub">Modo local: tudo fica salvo neste aparelho/navegador. Faça backups com frequência.</p>`}
     ${cartaoPessoas(eu())}
+    ${cartaoModelos()}
     ${vSeuPanda()}
         <div class="card"><h2>Categorias</h2>
       <p class="muted">Crie categorias e escolha um emoji ou uma imagem para cada uma.</p>
@@ -1416,6 +1428,14 @@ const acoes = {
   triMais: () => { ui.triMostrar = (ui.triMostrar || 10) + 10; },
   triForcar: v => { const i = itemTriagem(v); if (i) Object.assign(i, { estado: 'pendente', forcar: true }); },
   triIgnorar: v => { const i = itemTriagem(v); if (i) i.estado = 'ignorado'; },
+  triUsarModelo: (v, el) => { const i = itemTriagem(v); if (i) { i.categoria = el.dataset.cat; i.catManual = true; } },
+  mlAvaliar: async () => {
+    if (ui.mlAvaliando) return;
+    ui.mlAvaliando = 'Começando…'; render();
+    try { await ML.avaliar((p, t) => { ui.mlAvaliando = `Treinando e testando: parte ${p + 1} de ${t}…`; renderSeguro(); }); ML.prepararFinal(); }
+    catch (e) { alert(e.message); }
+    ui.mlAvaliando = ''; renderSeguro();
+  },
   triDesfazer: v => {
     const i = itemTriagem(v); if (!i) return;
     if (i.estado === 'ok') db.lancamentos = db.lancamentos.filter(l => l.id !== i.lancId);
