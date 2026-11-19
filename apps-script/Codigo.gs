@@ -267,7 +267,8 @@ function avisosDeHora() {
     const props = PropertiesService.getScriptProperties();
     const hojeTxt = Utilities.formatDate(new Date(), FUSO, 'yyyy-MM-dd');
     const hora = Number(Utilities.formatDate(new Date(), FUSO, 'H'));
-    if (hora < HORA_RESUMO || hora >= 22 || props.getProperty('resumoEm') === hojeTxt) return;
+    // Resumo só na hora certa (8h): se o relógio for ligado à tarde, não manda "Bom dia" fora de hora.
+    if (hora !== HORA_RESUMO || props.getProperty('resumoEm') === hojeTxt) return;
     const partes = [];
     dados.pessoas.forEach(function (p) {
       if (!chats[p.id] && !chats._grupo) return;
