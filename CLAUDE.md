@@ -126,7 +126,7 @@ PWA em JavaScript puro (sem framework, sem build) para finanças pessoais e plan
 - `cotacoes.js` — **🧮 Cotações** (aba interna `cotacoes`, cartão em Planos ao lado de Cidades): `db.cotacoes` (coleção
   `cotacoes`, em `EXTRAS`): { nome, modelo, planoId, itemId, componentes[] (somados no total), campos[] (texto),
   fornecedores[{ nome, status (contatar/pedido/recebido/fechado/descartado — `STATUS_COT`), contato, valores{}, dados{},
-  nota 0–5, obs }] }. Modelos prontos (`MODELOS_COT`: geral, foto e vídeo, buffet, carro, reforma, viagem). Tela com
+  nota 0–5, obs }] }. Modelos prontos (`MODELOS_COT`: geral, foto e vídeo, fotografia, vídeo, foto + vídeo, buffet, carro, reforma, viagem). Tela com
   resumo (menor total, média, com orçamento, fechado), comparativo (menor destacado, "+R$" acima do menor) e cartões
   por fornecedor com filtro por status; contato vira link (WhatsApp/Instagram/site). Fechar (`aoFechar`) oferece levar o
   total ao "previsto" do item do plano ligado; o plano lista as cotações dele. "📋 Colar cotação" (`lerCotacaoColada`)

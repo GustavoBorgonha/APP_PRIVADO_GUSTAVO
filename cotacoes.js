@@ -22,6 +22,9 @@ const STATUS_COT = {
 const MODELOS_COT = {
   geral: { nome: 'Geral', emoji: '🧮', componentes: ['Preço'], campos: ['Prazo', 'Forma de pagamento'] },
   foto: { nome: 'Foto e vídeo', emoji: '📸', componentes: ['Foto', 'Vídeo', 'Pré-wedding', 'Deslocamento'], campos: ['Serviço', 'Horas de cobertura', 'Nº de fotógrafos', 'Álbum / impressos', 'Forma de pagamento'] },
+  fotografia: { nome: 'Fotografia', emoji: '📷', componentes: ['Foto', 'Pré-wedding', 'Deslocamento'], campos: ['Serviço', 'Horas de cobertura', 'Nº de fotógrafos', 'Álbum / impressos', 'Forma de pagamento'] },
+  video: { nome: 'Vídeo', emoji: '🎬', componentes: ['Vídeo', 'Pré-wedding', 'Deslocamento'], campos: ['Serviço', 'Horas de cobertura', 'Filme / entregas', 'Drone', 'Forma de pagamento'] },
+  fotovideo: { nome: 'Foto + vídeo', emoji: '🎞️', componentes: ['Foto', 'Vídeo', 'Pré-wedding', 'Deslocamento'], campos: ['Serviço', 'Horas de cobertura', 'Equipe', 'Álbum / impressos', 'Filme / entregas', 'Forma de pagamento'] },
   festa: { nome: 'Buffet / festa', emoji: '🍽️', componentes: ['Por pessoa × convidados', 'Bebidas', 'Taxas'], campos: ['Cardápio', 'Horas de evento', 'Forma de pagamento'] },
   carro: { nome: 'Carro', emoji: '🚗', componentes: ['Preço', 'Documentação', 'Revisão'], campos: ['Ano / modelo', 'Km', 'Cor', 'Forma de pagamento'] },
   obra: { nome: 'Reforma / serviço', emoji: '🛠️', componentes: ['Mão de obra', 'Material'], campos: ['Prazo', 'Garantia', 'Forma de pagamento'] },
