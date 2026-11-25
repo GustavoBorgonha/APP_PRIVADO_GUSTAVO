@@ -131,6 +131,9 @@ PWA em JavaScript puro (sem framework, sem build) para finanças pessoais e plan
   por fornecedor com filtro por status; contato vira link (WhatsApp/Instagram/site). Fechar (`aoFechar`) oferece levar o
   total ao "previsto" do item do plano ligado; o plano lista as cotações dele. "📋 Colar cotação" (`lerCotacaoColada`)
   cria a partir de JSON `{ cotacao: { nome, modelo, plano, item, componentes, campos, fornecedores[...] } }`.
+  Aceita também `{ cotacoes: [...] }` (várias). "📤 Exportar" (uma ou todas; `modalExportar`): copiar/compartilhar texto
+  em Markdown (`textoCotacao`, opção de pedido para IA no começo), planilha .csv com ; e BOM (`csvCotacoes`) e .json no
+  formato do "Colar cotação" (`jsonCotacoes`).
 - `cidades.js` + `planilha-config.js` — tela "Cidades de SC" (aba interna `cidades`, entrada pelo cartão em
   Planos), espelho da planilha do Google "Cidades_SC_visitadas" (aba Cidades). A planilha é a fonte: o app
   fala com ela por uma ponte em Apps Script (`apps-script/Codigo.gs`, publicada como App da Web; a URL vai em

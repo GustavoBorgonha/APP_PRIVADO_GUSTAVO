@@ -84,7 +84,7 @@ function vCotacoes() {
       <div><button class="btn mini voltar" data-a="aba" data-v="planos">${IC.voltar} Planos</button>
         <h1 style="margin-top:10px">Cotações</h1>
         <p class="sub" style="margin:0">Compare orçamentos de fornecedores lado a lado: preço, status, contato e o que cada um oferece.</p></div>
-      <div class="acoes"><button class="btn" data-a="cotColar">📋 Colar cotação</button><button class="btn pri" data-a="cotNova">+ Nova cotação</button></div>
+      <div class="acoes">${(db.cotacoes || []).length ? '<button class="btn" data-a="cotExportar" data-v="">📤 Exportar todas</button>' : ''}<button class="btn" data-a="cotColar">📋 Colar cotação</button><button class="btn pri" data-a="cotNova">+ Nova cotação</button></div>
     </div>
     ${aviso}
     ${cs.length ? `<div class="planos">${cs.map(c => {
@@ -110,7 +110,7 @@ function vCotacao(c) {
       <div><button class="btn mini voltar" data-a="cotVoltar">${IC.voltar} Cotações</button>
         <h1 style="margin-top:10px">${MODELOS_COT[c.modelo]?.emoji || '🧮'} ${esc(c.nome)}</h1>
         <p class="sub" style="margin:0">${p ? `Plano: <b>${esc(p.nome)}</b>${item ? ' · item "' + esc(item.desc) + '"' : ''}` : 'Sem plano ligado'}</p></div>
-      <div class="acoes"><button class="btn" data-a="cotEditar" data-v="${esc(c.id)}">Editar</button><button class="btn pri" data-a="cotNovoForn" data-v="${esc(c.id)}">+ Fornecedor</button></div>
+      <div class="acoes"><button class="btn" data-a="cotExportar" data-v="${esc(c.id)}">📤 Exportar</button><button class="btn" data-a="cotEditar" data-v="${esc(c.id)}">Editar</button><button class="btn pri" data-a="cotNovoForn" data-v="${esc(c.id)}">+ Fornecedor</button></div>
     </div>
     <div class="grid">
       <div class="card stat"><div class="rot">Menor total</div><div class="val pos">${r.menor ? din(r.menor.t) : '—'}</div>${r.menor ? `<div class="muted small">${esc(r.menor.f.nome)}</div>` : ''}</div>
@@ -245,10 +245,15 @@ function aoFechar(c, f) {
 }
 
 /* ---------- colar cotação pronta (JSON) ---------- */
-function lerCotacaoColada(texto) {
+// Aceita uma cotação ({ cotacao: {...} }) ou várias ({ cotacoes: [...] }, como sai do "Exportar" em .json).
+function lerCotacoesColadas(texto) {
   const t = String(texto || '').replace(/^\s*```[a-z]*\s*/i, '').replace(/```\s*$/, '').trim();
   let j; try { j = JSON.parse(t); } catch (e) { throw new Error('Não consegui ler o texto. Copie e cole o bloco inteiro, do primeiro "{" até o último "}".'); }
-  const c = j && (j.cotacao || j);
+  const lista = Array.isArray(j?.cotacoes) ? j.cotacoes : [j && (j.cotacao || j)];
+  return lista.map(montarCotacao);
+}
+const lerCotacaoColada = texto => lerCotacoesColadas(texto)[0];
+function montarCotacao(c) {
   if (!c || !String(c.nome || '').trim()) throw new Error('O texto precisa ter pelo menos o nome da cotação.');
   const lista = x => Array.isArray(x) ? x : [];
   const componentes = lista(c.componentes).map(String).filter(Boolean), campos = lista(c.campos).map(String).filter(Boolean);
@@ -274,19 +279,98 @@ function modalColarCotacao() {
       <label class="full">Texto da cotação<textarea name="texto" rows="10" required spellcheck="false" style="font-family:ui-monospace,monospace;font-size:13px" placeholder='{ "cotacao": { "nome": "...", ... } }'></textarea></label>
       <div class="modal-acoes full"><button type="button" class="btn" data-a="fecharModal">Cancelar</button><button class="btn pri">Criar cotação</button></div>
     </form>`, d => {
-    let c; try { c = lerCotacaoColada(d.texto); } catch (e) { alert(e.message); return false; }
-    const igual = (db.cotacoes || []).find(x => semAcentoApp(x.nome) === semAcentoApp(c.nome));
+    let cs; try { cs = lerCotacoesColadas(d.texto); } catch (e) { alert(e.message); return false; }
     db.cotacoes = db.cotacoes || [];
-    if (igual && confirm(`Já existe a cotação "${igual.nome}". Substituir o conteúdo dela por esta?\n\nOK = substituir · Cancelar = criar outra`)) {
-      const id = igual.id; Object.assign(igual, c, { id }); ui.cotacao = id;
-    } else { db.cotacoes.push(c); ui.cotacao = c.id; }
+    cs.forEach(c => {
+      const igual = db.cotacoes.find(x => semAcentoApp(x.nome) === semAcentoApp(c.nome));
+      if (igual && confirm(`Já existe a cotação "${igual.nome}". Substituir o conteúdo dela por esta?\n\nOK = substituir · Cancelar = criar outra`)) {
+        const id = igual.id; Object.assign(igual, c, { id }); ui.cotacao = id;
+      } else { db.cotacoes.push(c); ui.cotacao = c.id; }
+    });
+    if (cs.length > 1) ui.cotacao = null;
     ui.aba = 'cotacoes';
     reagir('feliz', 'Cotação colada! 🧮');
-    alert(`Cotação "${c.nome}" pronta: ${c.fornecedores.length} fornecedor(es).`);
+    alert(cs.length === 1 ? `Cotação "${cs[0].nome}" pronta: ${cs[0].fornecedores.length} fornecedor(es).` : `${cs.length} cotações prontas.`);
+  });
+}
+
+/* ---------- exportar (texto para WhatsApp/IA, planilha .csv e .json) ---------- */
+const nomeStatus = s => (STATUS_COT[s] || STATUS_COT.contatar).nome;
+const brlTxt = v => typeof v === 'number' ? brl(v) : '—';
+function textoCotacao(c) {
+  const r = resumoCot(c), p = c.planoId && plano(c.planoId), item = p && c.itemId && p.itens.find(i => i.id === c.itemId);
+  const linhas = [`# ${c.nome}`];
+  if (p) linhas.push(`Plano: ${p.nome}${p.dataAlvo ? ' (data ' + fmtData(p.dataAlvo) + ')' : ''}${item ? ' · item "' + item.desc + '"' : ''}`);
+  linhas.push(`O total de cada fornecedor é a soma de: ${(c.componentes || []).join(' + ')}.`);
+  linhas.push(`Resumo: ${r.recebidos} de ${r.total} com orçamento` + (r.menor ? ` · menor total ${brl(r.menor.t)} (${r.menor.f.nome})` : '') +
+    (r.media !== null ? ` · média ${brl(r.media)}` : '') + (r.fechado ? ` · FECHADO com ${r.fechado.nome}` : '') + '.');
+  const comPreco = ordemForn(c).filter(f => totalForn(c, f) !== null && f.status !== 'descartado');
+  if (comPreco.length) {
+    linhas.push('', '## Comparativo (com preço)', '', `| Fornecedor | Total | ${(c.componentes || []).join(' | ')} |`, `|---|---|${(c.componentes || []).map(() => '---|').join('')}`);
+    comPreco.forEach(f => linhas.push(`| ${f.nome} | ${brl(totalForn(c, f))} | ${(c.componentes || []).map(k => brlTxt((f.valores || {})[k])).join(' | ')} |`));
+  }
+  linhas.push('', '## Fornecedores');
+  ordemForn(c).forEach(f => {
+    const t = totalForn(c, f);
+    linhas.push('', `### ${f.nome}`, `- Status: ${nomeStatus(f.status)}`, `- Total: ${t !== null ? brl(t) : 'sem preço'}`);
+    (c.componentes || []).forEach(k => { if (typeof (f.valores || {})[k] === 'number') linhas.push(`- ${k}: ${brl(f.valores[k])}`); });
+    (c.campos || []).forEach(k => { if ((f.dados || {})[k]) linhas.push(`- ${k}: ${f.dados[k]}`); });
+    if (f.contato) linhas.push(`- Contato: ${f.contato}`);
+    if (f.nota) linhas.push(`- Nossa nota: ${f.nota}/5`);
+    if (f.obs) linhas.push(`- Observações: ${f.obs}`);
+  });
+  return linhas.join('\n');
+}
+function csvCotacoes(cs) {
+  const comps = [...new Set(cs.flatMap(c => c.componentes || []))], campos = [...new Set(cs.flatMap(c => c.campos || []))];
+  const q = v => { const s = v === null || v === undefined ? '' : String(v); return /[;"\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; };
+  const num = v => typeof v === 'number' ? v.toFixed(2).replace('.', ',') : '';
+  const linhas = [['Cotação', 'Fornecedor', 'Status', 'Total (R$)', ...comps.map(k => k + ' (R$)'), ...campos, 'Nota', 'Contato', 'Observações'].map(q).join(';')];
+  cs.forEach(c => ordemForn(c).forEach(f => linhas.push([c.nome, f.nome, nomeStatus(f.status), num(totalForn(c, f)),
+    ...comps.map(k => num((f.valores || {})[k])), ...campos.map(k => (f.dados || {})[k] || ''), f.nota || '', f.contato || '', f.obs || ''].map(q).join(';'))));
+  return '\ufeff' + linhas.join('\r\n');   // BOM: o Excel abre os acentos certos
+}
+function jsonCotacoes(cs) {
+  const uma = c => { const p = c.planoId && plano(c.planoId), item = p && c.itemId && p.itens.find(i => i.id === c.itemId);
+    return { nome: c.nome, modelo: c.modelo || 'geral', ...(p ? { plano: p.nome } : {}), ...(item ? { item: item.desc } : {}), componentes: c.componentes || [], campos: c.campos || [],
+      fornecedores: (c.fornecedores || []).map(f => ({ nome: f.nome, status: nomeStatus(f.status), contato: f.contato || '', valores: f.valores || {}, dados: f.dados || {}, nota: f.nota || 0, obs: f.obs || '' })) }; };
+  return JSON.stringify(cs.length === 1 ? { cotacao: uma(cs[0]) } : { cotacoes: cs.map(uma) }, null, 1);
+}
+const PEDIDO_IA = 'Me ajude a escolher o melhor fornecedor. Compare preço, o que cada um inclui, horas de cobertura, entregas e forma de pagamento; aponte o que falta perguntar a cada um.';
+function modalExportar(ids) {
+  const cs = ids.map(cotacao).filter(Boolean); if (!cs.length) return;
+  const nome = cs.length === 1 ? cs[0].nome : 'Cotações';
+  abrirModal(`
+    <h2>📤 Exportar ${cs.length === 1 ? 'cotação' : cs.length + ' cotações'}</h2>
+    <div class="form">
+      <p class="muted small full" style="margin:0">Tudo: fornecedores, status, valores, campos, contato, nota e observações.</p>
+      <label class="full cal-check"><input type="checkbox" id="exp-ia"><span>🤖 Incluir um pedido para a IA no começo do texto <small class="muted">("${PEDIDO_IA.slice(0, 60)}…")</small></span></label>
+      <div class="full exp-opcoes">
+        <button type="button" class="btn pri" data-exp="copiar">📋 Copiar texto<small>para WhatsApp, e-mail ou IA</small></button>
+        ${navigator.share ? '<button type="button" class="btn" data-exp="compartilhar">📲 Compartilhar<small>abre o WhatsApp e outros apps</small></button>' : ''}
+        <button type="button" class="btn" data-exp="csv">📊 Planilha (.csv)<small>abre no Excel / Google Planilhas</small></button>
+        <button type="button" class="btn" data-exp="json">💾 Arquivo .json<small>volta pro app com "Colar cotação"</small></button>
+      </div>
+      <details class="full cal-ajuda"><summary>Ver o texto</summary><pre class="exp-previa">${esc(cs.map(textoCotacao).join('\n\n---\n\n'))}</pre></details>
+      <div class="modal-acoes full"><button type="button" class="btn" data-a="fecharModal">Fechar</button></div>
+    </div>`);
+  const texto = () => ($('#exp-ia').checked ? PEDIDO_IA + '\n\n' : '') + cs.map(textoCotacao).join('\n\n---\n\n');
+  const arquivo = nome.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^\w]+/g, '-').replace(/^-|-$/g, '').toLowerCase() || 'cotacoes';
+  $('#modal-body .form').addEventListener('click', async e => {
+    const b = e.target.closest('[data-exp]'); if (!b) return;
+    const tipo = b.dataset.exp;
+    if (tipo === 'copiar') {
+      try { await navigator.clipboard.writeText(texto()); b.firstChild.textContent = '✅ Copiado! '; }
+      catch (err) { prompt('Copie o texto:', texto()); }
+    } else if (tipo === 'compartilhar') {
+      try { await navigator.share({ title: nome, text: texto() }); } catch (err) { /* cancelado */ }
+    } else if (tipo === 'csv') baixar(arquivo + '.csv', csvCotacoes(cs), 'text/csv;charset=utf-8');
+    else if (tipo === 'json') baixar(arquivo + '.json', jsonCotacoes(cs), 'application/json');
   });
 }
 
 const acoesCotacoes = {
+  cotExportar: v => modalExportar(v ? [v] : (db.cotacoes || []).map(c => c.id)),
   cotNova: () => modalCotacao(),
   cotColar: () => modalColarCotacao(),
   cotAbrir: v => { ui.cotacao = v; ui.cotFiltro = 'todos'; },

@@ -901,6 +901,25 @@ async function cotacoesFornecedores(navegador, url, erros) {
   await p.click('#modal button.pri');
   await p.waitForSelector('h1:has-text("Buffet")');
   confere((await p.textContent('.grid .card:nth-child(1)')).replace(/\s/g, ' ').includes('8.480,00') && await p.locator('.cot-forn').count() === 2, 'colar cotação cria a comparação com os fornecedores');
+  // Exportar: texto (WhatsApp/IA), .csv e .json (que volta pelo "Colar cotação").
+  await p.click('.topo [data-a=cotExportar]');
+  const txt = await p.textContent('.exp-previa');
+  confere(txt.includes('# Buffet') && txt.includes('### Buffet A') && txt.includes('Cardápio: Churrasco') && txt.includes('Observações: Ligar segunda'), 'exportar gera o texto com todos os dados');
+  const [csv] = await Promise.all([p.waitForEvent('download'), p.click('[data-exp=csv]')]);
+  const conteudo = fs.readFileSync(await csv.path(), 'utf8');
+  confere(conteudo.includes('Cotação;Fornecedor;Status;Total (R$)') && conteudo.includes('Buffet;Buffet A;Orçamento recebido;8480,00'), 'exporta planilha .csv (Excel)');
+  const [js] = await Promise.all([p.waitForEvent('download'), p.click('[data-exp=json]')]);
+  const json = fs.readFileSync(await js.path(), 'utf8');
+  await p.click('#modal [data-a=fecharModal]');
+  await p.click('.topo [data-a=cotVoltar]');
+  await p.click('[data-a=cotColar]');
+  await p.fill('#modal textarea[name=texto]', json.replace('"Buffet"', '"Buffet (cópia)"'));
+  await p.click('#modal button.pri');
+  await p.waitForFunction(() => db.cotacoes.some(c => c.nome === 'Buffet (cópia)' && c.fornecedores.length === 2 && totalForn(c, c.fornecedores.find(f => f.nome === 'Buffet A')) === 8480));
+  confere(true, 'o .json exportado volta para o app pelo "Colar cotação"');
+  await p.click('.nav >> text=Planos'); await p.click('.cid-entrada[data-v=cotacoes]');
+  await p.click('[data-a=cotExportar][data-v=""]');
+  confere((await p.textContent('.exp-previa')).includes('# Foto e vídeo do casamento') && (await p.textContent('.exp-previa')).includes('# Buffet (cópia)'), '"Exportar todas" junta todas as cotações');
   await ctx.close();
 }
 
