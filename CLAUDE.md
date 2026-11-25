@@ -11,7 +11,7 @@ PWA em JavaScript puro (sem framework, sem build) para finanças pessoais e plan
 - **Login e dados:** Firebase (projeto `projetogustavoapp-88b20`): login Google + Cloud Firestore.
   - Coleções: `lancamentos`, `planos` (dados compartilhados entre os usuários autorizados),
     `triagens` (triagem de extrato em andamento), `categorias` (categorias criadas/editadas),
-    `agendados` (lançamentos futuros) e
+    `agendados` (lançamentos futuros), `tarefas`/`pessoas` (calendário), `cotacoes` e
     `acesso/permitidos` (campo `emails`: lista de quem pode entrar, editada só pelo console).
   - Regras em `firestore.rules`. Se mudarem, o Gustavo precisa colar no console do Firebase
     (aba Regras) — não há deploy automático das regras.
@@ -123,6 +123,14 @@ PWA em JavaScript puro (sem framework, sem build) para finanças pessoais e plan
   modelo final treina em segundo plano e refaz quando os lançamentos mudam. Usado na triagem (`dicaModelo`, botão
   "Usar") e na triagem automática. Cartão `cartaoModelos()` em Configurações. Próximo passo combinado: previsão de
   saldo (linha de base + faixa P10–P90; RF só com ~12 meses de dados).
+- `cotacoes.js` — **🧮 Cotações** (aba interna `cotacoes`, cartão em Planos ao lado de Cidades): `db.cotacoes` (coleção
+  `cotacoes`, em `EXTRAS`): { nome, modelo, planoId, itemId, componentes[] (somados no total), campos[] (texto),
+  fornecedores[{ nome, status (contatar/pedido/recebido/fechado/descartado — `STATUS_COT`), contato, valores{}, dados{},
+  nota 0–5, obs }] }. Modelos prontos (`MODELOS_COT`: geral, foto e vídeo, buffet, carro, reforma, viagem). Tela com
+  resumo (menor total, média, com orçamento, fechado), comparativo (menor destacado, "+R$" acima do menor) e cartões
+  por fornecedor com filtro por status; contato vira link (WhatsApp/Instagram/site). Fechar (`aoFechar`) oferece levar o
+  total ao "previsto" do item do plano ligado; o plano lista as cotações dele. "📋 Colar cotação" (`lerCotacaoColada`)
+  cria a partir de JSON `{ cotacao: { nome, modelo, plano, item, componentes, campos, fornecedores[...] } }`.
 - `cidades.js` + `planilha-config.js` — tela "Cidades de SC" (aba interna `cidades`, entrada pelo cartão em
   Planos), espelho da planilha do Google "Cidades_SC_visitadas" (aba Cidades). A planilha é a fonte: o app
   fala com ela por uma ponte em Apps Script (`apps-script/Codigo.gs`, publicada como App da Web; a URL vai em

@@ -63,6 +63,7 @@ Sempre que o arquivo [`firestore.rules`](firestore.rules) mudar, cole a versão 
   salvos só no aparelho onde foram criados.
 - Novembro/2026: entraram as regras `tarefas` e `pessoas` (calendário). Sem elas, o calendário
   fica salvo só no aparelho onde foi usado.
+- Novembro/2026: entrou a regra `cotacoes`. Sem ela, as cotações ficam salvas só no aparelho.
 
 ## Avisos no Telegram do calendário
 

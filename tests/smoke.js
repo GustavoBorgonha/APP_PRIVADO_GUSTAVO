@@ -29,8 +29,8 @@ const FIREBASE_FALSO = {
   'firebase-firestore.js': `
     // Banco em memória. window.__seed permite começar com dados de "outro aparelho".
     const seed = window.__seed || {};
-    const store = { lancamentos: new Map(seed.lancamentos || []), planos: new Map(seed.planos || []), triagens: new Map(seed.triagens || []), categorias: new Map(seed.categorias || []), agendados: new Map(seed.agendados || []), tarefas: new Map(seed.tarefas || []), pessoas: new Map(seed.pessoas || []) };
-    const subs = { lancamentos: [], planos: [], triagens: [], categorias: [], agendados: [], tarefas: [], pessoas: [] }, docSubs = []; window.__store = store;
+    const store = { lancamentos: new Map(seed.lancamentos || []), planos: new Map(seed.planos || []), triagens: new Map(seed.triagens || []), categorias: new Map(seed.categorias || []), agendados: new Map(seed.agendados || []), tarefas: new Map(seed.tarefas || []), pessoas: new Map(seed.pessoas || []), cotacoes: new Map(seed.cotacoes || []) };
+    const subs = { lancamentos: [], planos: [], triagens: [], categorias: [], agendados: [], tarefas: [], pessoas: [], cotacoes: [] }, docSubs = []; window.__store = store;
     window.__exportar = () => JSON.stringify(Object.fromEntries(Object.entries(store).map(([c, m]) => [c, [...m]])));
     export const initializeFirestore = () => ({}); export const persistentLocalCache = () => ({}); export const persistentMultipleTabManager = () => ({});
     export const collection = (f, c) => c; export const doc = (f, c, id) => ({ c, id });
@@ -46,7 +46,7 @@ const FIREBASE_FALSO = {
     export const deleteDoc = async r => { if (window.__semRegraTriagem) throw { code: 'permission-denied', message: 'negado' }; store[r.c].delete(r.id); setTimeout(emitDocs, 0); };
     export const writeBatch = () => { const ops = []; return {
       set: (r, d) => ops.push(() => store[r.c].set(r.id, d)), delete: r => ops.push(() => store[r.c].delete(r.id)),
-      commit: async () => { ops.forEach(o => o()); setTimeout(() => { emit('lancamentos'); emit('planos'); emit('categorias'); emit('agendados'); emit('tarefas'); emit('pessoas'); }, 0); } }; };`,
+      commit: async () => { ops.forEach(o => o()); setTimeout(() => { emit('lancamentos'); emit('planos'); emit('categorias'); emit('agendados'); emit('tarefas'); emit('pessoas'); emit('cotacoes'); }, 0); } }; };`,
 };
 
 // Escolhe uma categoria no seletor (botão que abre a lista com ícones).
@@ -856,6 +856,54 @@ async function modelosCategoria(navegador, url, erros) {
   await ctx.close();
 }
 
+// 🧮 Cotações: comparar fornecedores, menor total, fechar levando ao plano e colar uma cotação pronta.
+async function cotacoesFornecedores(navegador, url, erros) {
+  console.log('Cotações de fornecedores');
+  const ctx = await navegador.newContext();
+  await ctx.route('**/firebase-config.js', r => r.fulfill({ contentType: 'text/javascript', body: 'window.FIREBASE_CONFIG = null;' }));
+  const p = await ctx.newPage();
+  p.on('pageerror', e => erros.push('cotações: ' + e.message));
+  p.on('dialog', d => d.accept());
+  await p.goto(url);
+  await p.evaluate(() => { db.planos.push({ id: 'pc', tipo: 'casamento', nome: 'Nosso casamento', dataAlvo: '', meta: '', notas: '', aportes: [], tarefas: [],
+    itens: [{ id: 'it-foto', desc: 'Fotografia e vídeo', previsto: 0, pago: 0 }] }); salvar(); render(); });
+  await p.click('.nav >> text=Planos');
+  await p.click('.cid-entrada[data-v=cotacoes]');
+  await p.click('[data-a=cotNova]');
+  await p.click('#cot-form label:has(input[name=modelo][value=foto])');
+  confere((await p.inputValue('#cot-form [name=componentes]')).startsWith('Foto, Vídeo'), 'modelo "Foto e vídeo" preenche os componentes do preço');
+  await p.fill('#cot-form [name=nome]', 'Foto e vídeo do casamento');
+  await p.selectOption('#cot-plano', 'pc'); await p.selectOption('#cot-item', 'it-foto');
+  await p.click('#modal button.pri');
+  const forn = async (nome, foto, pre, contato) => {
+    await p.click('.topo [data-a=cotNovoForn]');
+    await p.fill('#forn-form [name=nome]', nome); await p.fill('#forn-form [name=contato]', contato);
+    await p.click('#forn-form label:has(input[name=status][value=recebido])');
+    await p.fill('#forn-form [name=v0]', String(foto)); if (pre) await p.fill('#forn-form [name=v2]', String(pre));
+    await p.click('#modal button.pri');
+  };
+  await forn('Alexia Photo', 3390, 899, '(47) 9620-5673');
+  await forn('Estúdio Caro', 5000, 0, '@estudiocaro');
+  confere((await p.textContent('.grid .card:nth-child(1)')).replace(/\s/g, ' ').includes('4.289,00') && (await p.textContent('.grid .card:nth-child(1)')).includes('Alexia'), 'mostra o menor total (soma dos componentes)');
+  confere(await p.locator('.cot-tabela tr.cot-menor').count() === 1 && (await p.textContent('.cot-tabela tbody tr:nth-child(2)')).replace(/\s/g, ' ').includes('+R$ 711,00'), 'comparativo destaca o menor e mostra quanto os outros custam a mais');
+  confere(await p.locator('.cot-forn a[href^="https://wa.me/55479620"]').count() === 1 && await p.locator('.cot-forn a[href="https://instagram.com/estudiocaro"]').count() === 1, 'contato vira link de WhatsApp ou Instagram');
+  await p.locator('.cot-forn:has-text("Alexia") select[data-c=cotStatus]').selectOption('fechado');
+  await p.waitForFunction(() => plano('pc').itens[0].previsto === 4289);
+  confere(true, 'fechar com um fornecedor leva o total para o previsto do item do plano');
+  await p.click('.nav >> text=Planos'); await p.click('.plano:has-text("Nosso casamento")');
+  confere(await p.isVisible('text=Cotações deste plano') && await p.isVisible('text=✅ Alexia Photo'), 'o plano mostra as cotações ligadas a ele');
+  // Colar cotação pronta.
+  await p.click('.nav >> text=Planos'); await p.click('.cid-entrada[data-v=cotacoes]');
+  await p.click('[data-a=cotColar]');
+  await p.fill('#modal textarea[name=texto]', JSON.stringify({ cotacao: { nome: 'Buffet', modelo: 'festa', componentes: ['Por pessoa × convidados', 'Bebidas'], campos: ['Cardápio'],
+    fornecedores: [{ nome: 'Buffet A', status: 'Orçamento recebido', valores: { 'Por pessoa × convidados': '6.480,00', Bebidas: 2000 }, dados: { Cardápio: 'Churrasco' }, nota: 4 },
+      { nome: 'Buffet B', status: 'A contatar', obs: 'Ligar segunda' }] } }));
+  await p.click('#modal button.pri');
+  await p.waitForSelector('h1:has-text("Buffet")');
+  confere((await p.textContent('.grid .card:nth-child(1)')).replace(/\s/g, ' ').includes('8.480,00') && await p.locator('.cot-forn').count() === 2, 'colar cotação cria a comparação com os fornecedores');
+  await ctx.close();
+}
+
 (async () => {
   await new Promise(ok => servidor.listen(0, '127.0.0.1', ok));
   const url = `http://127.0.0.1:${servidor.address().port}/`;
@@ -872,6 +920,7 @@ async function modelosCategoria(navegador, url, erros) {
     await cidadesPlanilha(navegador, url, erros);
     await calendarioTarefas(navegador, url, erros);
     await modelosCategoria(navegador, url, erros);
+    await cotacoesFornecedores(navegador, url, erros);
     if (erros.length) throw new Error('Erros de JavaScript na página:\n' + erros.join('\n'));
     console.log('\nTudo certo ✅');
   } catch (e) {

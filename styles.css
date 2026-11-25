@@ -1123,3 +1123,38 @@ a.btn { text-decoration: none; color: var(--text); display: inline-flex; align-i
 .ml-tabela td.num { white-space: nowrap; }
 @media (max-width: 520px) { .ml-tabela { font-size: 12.5px; } .ml-tabela th, .ml-tabela td { padding-left: 4px; padding-right: 4px; } .ml-tabela .chip { display: none; } }
 .ml-uso td { font-weight: 700; }
+
+/* ---------- cotações ---------- */
+button.chip { cursor: pointer; font: inherit; font-size: 13px; }
+button.chip.ativo { background: var(--ink); color: var(--ink-text); border-color: var(--ink); }
+.cot-filtros { margin: 4px 0 14px; }
+.cot-lista { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 14px; }
+.cot-forn { display: flex; flex-direction: column; gap: 10px; border-left: 4px solid var(--line-forte); margin: 0; }
+.cot-forn.st-verde { border-left-color: var(--green); }
+.cot-forn.st-azul { border-left-color: #4f7fd9; }
+.cot-forn.st-amarelo { border-left-color: #e0a92e; }
+.cot-forn.st-vermelho { border-left-color: var(--red); opacity: .6; }
+.cot-forn.cot-menor { box-shadow: 0 0 0 2px var(--green) inset; }
+.cot-cab { display: flex; justify-content: space-between; gap: 10px; align-items: flex-start; }
+.cot-cab a { color: var(--acento); text-decoration: none; }
+.cot-total { text-align: right; font-weight: 800; font-size: 18px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.cot-total small { display: block; font-size: 11px; font-weight: 600; color: var(--green); }
+.cot-valores { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 13px; color: var(--muted); }
+.cot-valores b { color: var(--text); font-weight: 600; }
+.cot-dados { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 12px; font-size: 13px; }
+.cot-dados small { display: block; color: var(--muted); font-size: 11px; }
+.cot-obs { margin: 0; font-size: 13px; color: var(--muted); white-space: pre-wrap; }
+.cot-acoes { display: flex; gap: 8px; align-items: center; margin-top: auto; }
+.cot-acoes select { flex: 1; min-width: 0; }
+.cot-nota { color: #e0a92e; letter-spacing: 1px; font-size: 13px; white-space: nowrap; }
+.cot-tabela tbody tr { cursor: pointer; }
+.cot-tabela tr.cot-menor td { background: color-mix(in srgb, var(--green) 10%, transparent); }
+.cot-tabela tr.cot-fechado td:first-child { box-shadow: inset 3px 0 0 var(--green); }
+.cot-tabela td, .cot-tabela th { white-space: nowrap; }
+.cot-modelos, .cot-status-esc { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; margin-top: 6px; }
+.cot-estrelas { display: flex; align-items: center; gap: 4px; margin-top: 6px; }
+.cot-estrelas label { cursor: pointer; }
+.cot-estrelas input { position: absolute; opacity: 0; width: 0; }
+.cot-estrelas label span { font-size: 26px; color: var(--line-forte); transition: color .15s; }
+.cot-estrelas label:has(~ label input:checked:not([value="0"])) span, .cot-estrelas label:has(input:checked:not([value="0"])) span { color: #e0a92e; }
+.cot-estrelas .cot-sem-nota span { font-size: 13px; color: var(--muted); margin-left: 10px; text-decoration: underline; }

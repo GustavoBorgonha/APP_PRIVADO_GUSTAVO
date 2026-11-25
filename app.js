@@ -145,11 +145,11 @@ function lerArquivo(accept) {
 }
 
 /* ---------- dados ---------- */
-function vazio() { return { versao: 1, lancamentos: [], planos: [], categorias: [], agendados: [], tarefas: [], pessoas: [] }; }
+function vazio() { return { versao: 1, lancamentos: [], planos: [], categorias: [], agendados: [], tarefas: [], pessoas: [], cotacoes: [] }; }
 function carregar() {
   try {
     const d = JSON.parse(localStorage.getItem(CHAVE));
-    if (d && Array.isArray(d.lancamentos) && Array.isArray(d.planos)) { if (!Array.isArray(d.categorias)) d.categorias = []; if (!Array.isArray(d.agendados)) d.agendados = []; if (!Array.isArray(d.tarefas)) d.tarefas = []; if (!Array.isArray(d.pessoas)) d.pessoas = []; return d; }
+    if (d && Array.isArray(d.lancamentos) && Array.isArray(d.planos)) { if (!Array.isArray(d.categorias)) d.categorias = []; if (!Array.isArray(d.agendados)) d.agendados = []; if (!Array.isArray(d.tarefas)) d.tarefas = []; if (!Array.isArray(d.pessoas)) d.pessoas = []; if (!Array.isArray(d.cotacoes)) d.cotacoes = []; return d; }
   } catch (e) { /* sem dados */ }
   return vazio();
 }
@@ -265,9 +265,9 @@ function render() {
   document.body.dataset.aba = ui.aba;
   if (App.modo === 'carregando') { $('#app').innerHTML = `<div class="carregando">${panda()}Carregando seus dados…</div>`; return; }
   if (App.modo === 'login') { $('#app').innerHTML = vLogin(); return; }
-  const abaMenu = ['categorias', 'revisao', 'contas', 'agenda'].includes(ui.aba) ? 'financas' : ui.aba === 'cidades' ? 'planos' : ui.aba;
+  const abaMenu = ['categorias', 'revisao', 'contas', 'agenda'].includes(ui.aba) ? 'financas' : ['cidades', 'cotacoes'].includes(ui.aba) ? 'planos' : ui.aba;
   document.querySelectorAll('.nav button').forEach(b => b.classList.toggle('ativo', b.dataset.v === abaMenu));
-  const views = { inicio: vInicio, financas: vFinancas, extratos: vExtratos, planos: vPlanos, dados: vDados, categorias: vCategorias, cidades: vCidades, revisao: vRevisao, contas: vContas, agenda: vAgenda, calendario: vCalendario };
+  const views = { inicio: vInicio, financas: vFinancas, extratos: vExtratos, planos: vPlanos, dados: vDados, categorias: vCategorias, cidades: vCidades, revisao: vRevisao, contas: vContas, agenda: vAgenda, calendario: vCalendario, cotacoes: vCotacoes };
   const tela = ui.aba + '|' + (ui.aba === 'planos' ? ui.plano || '' : ui.aba === 'extratos' && ui.naTriagem ? 'triagem' : ui.aba === 'extratos' ? ui.lote || '' : '');
   const trocou = tela !== render.tela; render.tela = tela;
   const app = $('#app');
@@ -737,7 +737,7 @@ function vPlanos() {
     ${avisoCidadesGlobal()}
     <div class="topo"><div><h1>Planos e metas</h1><p class="sub" style="margin:0">Viagens, passeios, casamento, casa, carro…</p></div>
       <div class="acoes"><button class="btn" data-a="colarPlano">📋 Colar plano</button><button class="btn pri" data-a="novoPlano">+ Novo plano</button></div></div>
-    <div class="planos" style="margin-bottom:14px">${cartaoCidades()}</div>
+    <div class="planos" style="margin-bottom:14px">${cartaoCidades()}${cartaoCotacoes()}</div>
     ${db.planos.length ? `<div class="planos">${db.planos.map(cardPlano).join('')}</div>`
       : `<div class="card"><h2>Comece um plano</h2><p class="muted">Cada plano já vem com uma lista sugerida de custos e tarefas que você pode ajustar.</p>
         <div class="tipos">${Object.entries(TIPOS).map(([k, t]) => `<button class="btn tipo" data-a="novoPlano" data-v="${k}"><span class="emoji">${t.emoji}</span>${t.nome}</button>`).join('')}</div></div>`}`;
@@ -798,6 +798,10 @@ function vPlano(p) {
         <form class="add" data-f="addTarefa" data-p="${p.id}"><input name="texto" placeholder="Nova tarefa" required><button class="btn">Adicionar</button></form>
       </div>
     </div>
+    ${(db.cotacoes || []).some(c => c.planoId === p.id) ? `<div class="card"><div class="topo secao"><h2>🧮 Cotações deste plano</h2><button class="link" data-a="aba" data-v="cotacoes">Ver todas ${IC.seta}</button></div>
+      <div class="movs">${db.cotacoes.filter(c => c.planoId === p.id).map(c => { const r = resumoCot(c); return `<div class="mov" data-a="cotIrPara" data-v="${esc(c.id)}" role="button" tabindex="0">
+        <span class="mov-ic">🧮</span><span class="mov-txt"><strong>${esc(c.nome)}</strong><small>${r.recebidos} de ${r.total} com orçamento${r.fechado ? ' · ✅ ' + esc(r.fechado.nome) : ''}</small></span>
+        <span class="mov-val">${r.fechado && totalForn(c, r.fechado) !== null ? din(totalForn(c, r.fechado)) : r.menor ? 'a partir de ' + din(r.menor.t) : ''}</span></div>`; }).join('')}</div></div>` : ''}
     <div class="card"><h2>Anotações</h2>
       <textarea rows="4" data-c="notas" data-p="${p.id}" placeholder="Ideias, links, contatos de fornecedores…">${esc(p.notas || '')}</textarea></div>`;
 }
@@ -1371,7 +1375,7 @@ async function importarCSV() {
 
 /* ---------- ações ---------- */
 const acoes = {
-  aba: v => { ui.aba = v; ui.plano = null; ui.naTriagem = false; },   // trocar de aba pausa a triagem (fica salva)
+  aba: v => { ui.aba = v; ui.plano = null; ui.naTriagem = false; ui.cotacao = null; },   // trocar de aba pausa a triagem (fica salva)
   mes: v => { ui.mes = mesDesloc(ui.mes, +v); },
   novoLanc: v => modalLanc(null, v),
   filtro: v => { ui.filtro = v; },
@@ -1534,7 +1538,7 @@ ${usados.length === 1 ? 'O lançamento que usa' : `Os ${usados.length} lançamen
   },
 };
 
-Object.assign(acoes, acoesCidades, acoesRevisao, acoesContas, acoesAgenda, acoesCalendario);
+Object.assign(acoes, acoesCidades, acoesRevisao, acoesContas, acoesAgenda, acoesCalendario, acoesCotacoes);
 
 document.addEventListener('click', e => {
   const el = e.target.closest('[data-a]'); if (!el) return;
@@ -1574,6 +1578,11 @@ document.addEventListener('change', e => {
   else if (c === 'tarefaFeita') {
     const t = p.tarefas.find(t => t.id === el.dataset.i); t.feito = el.checked;
     if (t.feito) reagir('feliz', 'Uma a menos! ✅', 'Tarefa feita! Arrasou 💪');
+  }
+  else if (c === 'cotStatus') {
+    const [ci, fi] = el.dataset.i.split('|'), co = cotacao(ci), f = co && fornecedorDe(co, fi); if (!f) return;
+    const virou = el.value === 'fechado' && f.status !== 'fechado';
+    f.status = el.value; if (virou) aoFechar(co, f);
   }
   else if (c === 'calFeito') {
     const t = (db.tarefas || []).find(x => x.id === el.dataset.i); if (!t) return;
@@ -1643,7 +1652,7 @@ App.carregando = () => {
 // Triagem vinda da nuvem (de qualquer aparelho).
 /* Coleções "extras" da nuvem (categorias, agendados): chegam por conta própria e, se as regras do
    Firebase ainda não as aceitarem, ficam salvas neste aparelho até a regra existir. */
-const EXTRAS = { categorias: 'apg-categorias', agendados: 'apg-agendados', tarefas: 'apg-tarefas', pessoas: 'apg-pessoas' };
+const EXTRAS = { categorias: 'apg-categorias', agendados: 'apg-agendados', tarefas: 'apg-tarefas', pessoas: 'apg-pessoas', cotacoes: 'apg-cotacoes' };
 App.semNuvem = {}; App.extrasPendentes = {};
 App.receberExtra = (c, docs) => {
   db[c] = docs;
@@ -1720,6 +1729,7 @@ App.receber = (colecao, docs, pronto) => {
       if (!(db.agendados || []).length) db.agendados = local.agendados || [];
       if (!(db.tarefas || []).length) db.tarefas = local.tarefas || [];
       if (!(db.pessoas || []).length) db.pessoas = local.pessoas || [];
+      if (!(db.cotacoes || []).length) db.cotacoes = local.cotacoes || [];
       salvar();
     }
     enviarExtrasPendentes();
